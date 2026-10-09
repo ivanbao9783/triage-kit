@@ -4,6 +4,7 @@ Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Ha
 
 - **`triage analyze`** — post-evaluation triage of trial results: filter badcases (`--failing`), attribute each one against a rubric (reward hacking / task specification)
 - **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric)
+- **`triage clean`** — restore evaluated directories by removing all `triage-kit/` product directories (dry-run by default)
 
 triage-kit is extracted from the [pier](https://github.com/datacurve-ai/pier)-ecosystem evaluation tooling. Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte); this repo restores them as an **independently runnable** toolkit that works with any OpenAI-compatible endpoint or the Claude Agent SDK. Design document: [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -88,7 +89,7 @@ Product: `triage-kit/check-result.json` (+ `check-result.meta.json` sidecar) in 
 |---|---|
 | `-y, --yes` | Actually delete (default is a dry-run listing) |
 
-Restores evaluated directories to their pre-triage state: recursively finds and removes every `triage-kit/` product directory under the given trial/job/task path. Dry-run by default — pass `--yes` to delete. Original evaluation data (`result.json`, `trajectory.json`, `task.toml`, ...) is never touched.
+Restores evaluated directories to their pre-triage state: recursively finds and removes every `triage-kit/` product directory under the given trial/job/task path. Dry-run by default — pass `--yes` to delete. Original evaluation data (`result.json`, `trajectory.json`, `task.toml`, ...) is never touched. A locked/forbidden target is reported by name and skipped (remaining targets are still removed; exit code 1 signals the partial failure).
 
 ### Backends
 
@@ -137,13 +138,12 @@ The five prompt/rubric files are frozen byte-for-byte against their pier origina
 
 - trae harness SKILL.md asset pack (M8)
 - family rubrics (e.g. `deep-swe`) shipped under `assets/check/rubrics/`
-- real-endpoint E2E (mock-endpoint E2E is already in the test suite)
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest                    # 148 tests, no network access needed
+pytest                    # 161 tests, no network access needed
 ```
 
 ## License
