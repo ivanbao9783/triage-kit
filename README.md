@@ -127,14 +127,14 @@ Judgment criteria live in data (TOML rubrics); output schemas are generated dyna
 ```
 assets/                  pure-text assets, decoupled from code
 ├── analyze/             triage workflow
-│   ├── analyze.txt          judge prompt template ({task_section} {criteria_guidance})
-│   ├── analyze-job.txt      job-level aggregation template ({trial_results})
-│   └── analyze-rubric.toml  default criteria: reward_hacking / task_specification
+│   ├── analyze.txt          judge prompt template
+│   ├── analyze-job.txt      job-level aggregation template
+│   └── analyze-rubric.toml  default criteria
 └── check/               task quality workflow
-    ├── check.txt            judge prompt template ({file_tree} {criteria_guidance})
+    ├── check.txt            judge prompt template
     └── rubrics/
-        ├── check-default.toml   11 criteria (completeness / anti-cheating / reproducibility / hygiene)
-        └── KNOWN-ISSUES.md      documented rubric defects backlog (real-badcase driven)
+        ├── check-default.toml   11 criteria
+        └── KNOWN-ISSUES.md      documented rubric defects backlog
 ```
 
 The five prompt/rubric files are frozen byte-for-byte against their pier originals (guarded by sha256 snapshot tests) for asset provenance and diff-ability against upstream.
