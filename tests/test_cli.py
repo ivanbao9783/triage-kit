@@ -307,7 +307,7 @@ class TestCheckCommand:
         result = runner.invoke(app, ["check", str(task), "--model", "m1"])
 
         assert result.exit_code == 0, result.output
-        out = task / "check-result.json"
+        out = task / "triage-check-result.json"
         assert out.is_file()
         saved = json.loads(out.read_text(encoding="utf-8"))
         assert "behavior_in_task_description" in saved["checks"]
@@ -332,7 +332,7 @@ class TestCheckCommand:
 
         assert result.exit_code == 0, result.output
         saved = json.loads(
-            (task / "check-result.json").read_text(encoding="utf-8")
+            (task / "triage-check-result.json").read_text(encoding="utf-8")
         )
         assert list(saved["checks"]) == ["one_check"]
 

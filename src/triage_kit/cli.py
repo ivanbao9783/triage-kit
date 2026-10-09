@@ -134,11 +134,18 @@ def analyze(
         False, "--force", "-f",
         help="Re-analyze even if cached analysis.json exists (overwrites).",
     ),
+    lang: str = typer.Option(
+        "en", "--lang",
+        help="Product language: en (default) or zh — adds a translated "
+             "triage-kit-analysis.zh.md next to the English products.",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Attribute badcases: judge trials against a rubric."""
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
+    if lang not in ("en", "zh"):
+        _fail(f"--lang must be 'en' or 'zh', got {lang!r}")
 
     path = Path(path)
     if not path.exists():
@@ -160,6 +167,7 @@ def analyze(
             rubric=load_rubric(rubric_path),
             model=effective_model,
             force=force,
+            lang=lang,
         )
 
         if trial_reader.is_trial_dir(path):
@@ -190,7 +198,7 @@ def check(
     ),
     force: bool = typer.Option(
         False, "--force", "-f",
-        help="Re-check even if cached check-result.json exists (overwrites).",
+        help="Re-check even if cached triage-check-result.json exists (overwrites).",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:

@@ -21,6 +21,14 @@ _DEGRADED_TASK_SECTION = (
     "Use the trajectory and test output to infer what the task required."
 )
 
+_TRANSLATE_INSTRUCTION = (
+    "Translate the following Markdown report into Simplified Chinese. "
+    "Preserve the Markdown structure (headings, lists, code blocks) and "
+    "keep technical identifiers (file names, trial names, criterion "
+    "names such as reward_hacking) untranslated. Output ONLY the "
+    "translated Markdown, no preamble.\n\n"
+)
+
 
 def _render_task_section(task_dir: Path | None) -> str:
     """Hand-list key files instead of rendering a full tree (pier parity).
@@ -56,11 +64,12 @@ class Analyzer:
     """Attribution analysis over trials (single) and jobs (aggregate)."""
 
     def __init__(self, *, backend, rubric: Rubric, model: str,
-                 force: bool = False):
+                 force: bool = False, lang: str = "en"):
         self.backend = backend
         self.rubric = rubric
         self.model = model
         self.force = force
+        self.lang = lang
         self._template = get_asset("analyze/analyze.txt").read_text(encoding="utf-8")
         self._job_template = get_asset("analyze/analyze-job.txt").read_text(
             encoding="utf-8"
@@ -69,6 +78,20 @@ class Analyzer:
 
     def _identity(self) -> dict:
         return {"rubric_sha256": self.rubric.source_sha256, "model": self.model}
+
+    def _translate_markdown(self, directory: Path, markdown: str) -> None:
+        """Second-hop translation: write triage-kit-analysis.zh.md next to
+        the (untouched, English) contract products."""
+        translated, _meta = self.backend.query(
+            _TRANSLATE_INSTRUCTION + markdown, model=self.model
+        )
+        if not translated.strip():
+            raise ValueError(
+                f"translation returned empty output (dir={directory.name})"
+            )
+        (directory / "triage-kit-analysis.zh.md").write_text(
+            translated, encoding="utf-8"
+        )
 
     def analyze_trial(self, trial_dir: Path, *, task_dir: Path | None = None) -> dict:
         trial_dir = Path(trial_dir)
@@ -105,9 +128,13 @@ class Analyzer:
             )
 
         cache.write_json(trial_dir / "analysis.json", analysis)
-        (trial_dir / "analysis.md").write_text(
-            _render_analysis_md(analysis), encoding="utf-8"
-        )
+        markdown = _render_analysis_md(analysis)
+        # analysis.md is the pier-viewer contract name; the prefixed copy
+        # exists so triage-kit products are recognizable at a glance.
+        (trial_dir / "analysis.md").write_text(markdown, encoding="utf-8")
+        (trial_dir / "triage-kit-analysis.md").write_text(markdown, encoding="utf-8")
+        if self.lang == "zh":
+            self._translate_markdown(trial_dir, markdown)
         cache.write_json(trial_dir / "analysis.meta.json", self._identity())
         return analysis
 
@@ -144,7 +171,9 @@ class Analyzer:
             "failed_trials": failed_trials,
         }
         cache.write_json(job_dir / "analysis.json", result)
-        (job_dir / "analysis.md").write_text(
-            f"# Job Analysis\n\n{summary}\n", encoding="utf-8"
-        )
+        markdown = f"# Job Analysis\n\n{summary}\n"
+        (job_dir / "analysis.md").write_text(markdown, encoding="utf-8")
+        (job_dir / "triage-kit-analysis.md").write_text(markdown, encoding="utf-8")
+        if self.lang == "zh":
+            self._translate_markdown(job_dir, markdown)
         return result

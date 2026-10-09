@@ -24,11 +24,13 @@ cat outputs/job/details/<trial>/analysis.md     # human-readable attribution
 cat outputs/job/details/<trial>/analysis.json  # machine-readable (same schema)
 ```
 
+Add `--lang zh` to also get a Simplified-Chinese copy (`triage-kit-analysis.zh.md`) of every report.
+
 For task quality inspection before running an evaluation:
 
 ```bash
 triage check path/to/task --backend general --model glm-4.7
-cat path/to/task/check-result.json
+cat path/to/task/triage-check-result.json
 ```
 
 ## Installation
@@ -54,9 +56,14 @@ Requires Python 3.11+. The editable install keeps the `assets/` tree next to the
 | `-m, --model <name>` | Model name — **required for `general`** |
 | `--base-url <url>` | OpenAI-compatible endpoint override — `general` only |
 | `-f, --force` | Re-analyze even if cached `analysis.json` exists (overwrites) |
+| `--lang en\|zh` | Product language (default: `en`); `zh` adds a translated `triage-kit-analysis.zh.md` |
 | `-v, --verbose` | Debug logging |
 
-Products are written into each trial directory (`analysis.json` + `analysis.md`) and the job directory (aggregated `analysis.json` + `analysis.md`).
+Products are written in place — into each trial directory and the job directory:
+
+- `analysis.json` + `analysis.md` — the pier-viewer contract files (frozen names)
+- `triage-kit-analysis.md` — prefixed copy of the report, so triage-kit products are recognizable at a glance
+- `triage-kit-analysis.zh.md` — Simplified-Chinese translation (only with `--lang zh`); the English files stay untouched
 
 ### `triage check <task_dir>`
 
@@ -66,10 +73,10 @@ Products are written into each trial directory (`analysis.json` + `analysis.md`)
 | `--backend general\|claude` | Backend selection (default: `general`) |
 | `-m, --model <name>` | Model name — **required for `general`** |
 | `--base-url <url>` | OpenAI-compatible endpoint override — `general` only |
-| `-f, --force` | Re-check even if cached `check-result.json` exists (overwrites) |
+| `-f, --force` | Re-check even if cached `triage-check-result.json` exists (overwrites) |
 | `-v, --verbose` | Debug logging |
 
-Product: `check-result.json` in the task directory.
+Product: `triage-check-result.json` in the task directory (not a viewer contract file, hence the prefixed name).
 
 ### Backends
 
@@ -89,7 +96,7 @@ triage check path/to/task        # defaults to -m sonnet (pier parity)
 
 ### Caching
 
-Both commands reuse cached products by default. A cache hit requires an identity match: the rubric sha256 and model recorded in the sidecar (`analysis.meta.json` / `check-result.meta.json`) must equal the current run's. On mismatch the command errors and points at `--force`; on `--force` it reruns and overwrites. Cached files are re-validated against the live response schema — a corrupted cache never flows into products silently.
+Both commands reuse cached products by default. A cache hit requires an identity match: the rubric sha256 and model recorded in the sidecar (`analysis.meta.json` / `triage-check-result.meta.json`) must equal the current run's. On mismatch the command errors and points at `--force`; on `--force` it reruns and overwrites. Cached files are re-validated against the live response schema — a corrupted cache never flows into products silently.
 
 ## What the judge sees
 
@@ -122,7 +129,7 @@ The five prompt/rubric files are frozen byte-for-byte against their pier origina
 
 ```bash
 pip install -e ".[dev]"
-pytest                    # 144 tests, no network access needed
+pytest                    # 148 tests, no network access needed
 ```
 
 ## License

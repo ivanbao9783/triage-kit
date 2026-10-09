@@ -44,7 +44,10 @@ def make_backend_seq(responses: list):
 
         def query(self, prompt, *, model):
             self.plain_prompts.append(prompt)
-            return "JOB SUMMARY", AgentMeta(n_turns=0, model=model)
+            # query and query_agent consume the SAME list in true call
+            # order (interleaved) — script responses in the exact order
+            # the workflow calls the backend
+            return self.responses.pop(0), AgentMeta(n_turns=0, model=model)
 
     return FakeBackend()
 
@@ -103,6 +106,89 @@ class TestAnalyzeTrial:
         assert (trial / "analysis.md").is_file()
         saved = json.loads((trial / "analysis.json").read_text(encoding="utf-8"))
         assert saved["checks"]["reward_hacking"]["outcome"] == "pass"
+
+    def test_writes_prefixed_markdown_copy(self, trial, rubric):
+        """Q2a: analysis.md 之外双写 triage-kit-analysis.md 前缀副本，
+        内容与 analysis.md 一致（契约文件名保留给 pier viewer）。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        Analyzer(backend=make_backend(GOOD_RESPONSE), rubric=rubric,
+                 model="test-model").analyze_trial(trial)
+
+        original = (trial / "analysis.md").read_text(encoding="utf-8")
+        prefixed = (trial / "triage-kit-analysis.md").read_text(encoding="utf-8")
+        assert prefixed == original
+
+    def test_writes_prefixed_job_markdown_copy(self, tmp_path, rubric):
+        """Q2a: job 级同样双写前缀副本。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        backend = make_backend(GOOD_RESPONSE)
+        Analyzer(backend=backend, rubric=rubric,
+                 model="test-model").analyze_job(tmp_path)
+
+        original = (tmp_path / "analysis.md").read_text(encoding="utf-8")
+        prefixed = (tmp_path / "triage-kit-analysis.md").read_text(encoding="utf-8")
+        assert prefixed == original
+        assert original.startswith("# Job Analysis")
+
+    def test_lang_zh_writes_translated_copy_per_trial_and_job(
+        self, tmp_path, rubric
+    ):
+        """Q3: --lang zh 在英文产物之外追加 triage-kit-analysis.zh.md。
+
+        翻译二跳：契约文件（analysis.md）保持英文不动，中文是
+        triage-kit 自有命名空间的增量产物。job 级翻译用一次 query，
+        trial 级各一次——本测试共 2 trial + 1 job = 3 次翻译调用。
+        """
+        from triage_kit.core.analyzer import Analyzer
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        make_trial(tmp_path / "t2__bbb", reward=0.0)
+        # Responses are consumed in true call order — per-trial translation
+        # happens inside analyze_trial, interleaved between agent calls:
+        # agent(t1) → query(t1 zh) → agent(t2) → query(t2 zh) → job agg → job zh
+        backend = make_backend_seq([
+            dict(GOOD_RESPONSE, trial_name="t1__aaa"),
+            "TRANSLATED",   # t1 zh
+            dict(GOOD_RESPONSE, trial_name="t2__bbb"),
+            "TRANSLATED",   # t2 zh
+            "JOB SUMMARY",  # job aggregation
+            "TRANSLATED",   # job zh
+        ])
+        Analyzer(backend=backend, rubric=rubric, model="test-model",
+                 lang="zh").analyze_job(tmp_path)
+
+        # trial 级中文副本
+        for name in ("t1__aaa", "t2__bbb"):
+            zh = (tmp_path / name / "triage-kit-analysis.zh.md").read_text(
+                encoding="utf-8"
+            )
+            assert zh == "TRANSLATED"
+        # job 级中文副本
+        assert (tmp_path / "triage-kit-analysis.zh.md").read_text(
+            encoding="utf-8"
+        ) == "TRANSLATED"
+        # 英文契约产物不受影响
+        en = (tmp_path / "t1__aaa" / "analysis.md").read_text(encoding="utf-8")
+        assert "Agent solved it." in en
+        # 翻译调用次数：2 trial + 1 job = 3（另有 1 次 job 聚合 query）
+        translations = [
+            p for p in backend.plain_prompts if p.startswith("Translate")
+        ]
+        assert len(translations) == 3
+
+    def test_lang_default_is_english_no_extra_calls(self, trial, rubric):
+        """Q3: 默认英文——零翻译调用，无中文副本。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        backend = make_backend(GOOD_RESPONSE)
+        Analyzer(backend=backend, rubric=rubric,
+                 model="test-model").analyze_trial(trial)
+
+        assert len(backend.plain_prompts) == 0
+        assert not (trial / "triage-kit-analysis.zh.md").exists()
 
     def test_task_dir_override_lands_in_prompt(self, trial, tmp_path, rubric):
         from triage_kit.core.analyzer import Analyzer
@@ -349,9 +435,9 @@ class TestAnalyzeJob:
         make_trial(tmp_path / "t1__aaa", reward=0.0)
         make_trial(tmp_path / "t2__bbb", reward=0.0)
 
-        bad = dict(GOOD_RESPONSE, trial_name="wrong__name")  # 不匹配目录名
+        bad = dict(GOOD_RESPONSE, trial_name="wrong__name")
         good = dict(GOOD_RESPONSE, trial_name="t2__bbb")
-        backend = make_backend_seq([bad, good])
+        backend = make_backend_seq([bad, good, "JOB SUMMARY"])
 
         result = Analyzer(backend=backend, rubric=rubric,
                           model="test-model").analyze_job(tmp_path)
@@ -380,8 +466,7 @@ class TestAnalyzeJob:
                "checks": {"reward_hacking": {"outcome": "bogus", "explanation": "x"}}}
         good = {"trial_name": "t2__bbb", "summary": "ok",
                 "checks": GOOD_RESPONSE["checks"]}
-
-        backend = make_backend_seq([bad, good])
+        backend = make_backend_seq([bad, good, "JOB SUMMARY"])
         result = Analyzer(backend=backend, rubric=rubric, model="test-model").analyze_job(tmp_path)
 
         # t1 failed validation, t2 still analyzed, aggregation still happened

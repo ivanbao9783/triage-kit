@@ -6,6 +6,10 @@ import pytest
 
 from tests.conftest import CHECK_RUBRIC, make_task, write_sidecar
 
+# Product name (not a viewer contract — triage-kit's own naming).
+RESULT = "triage-check-result.json"
+SIDECAR = "triage-check-result.meta.json"
+
 
 def make_backend(response: dict):
     from triage_kit.core.contract import AgentMeta
@@ -86,7 +90,7 @@ class TestCheckTask:
         backend = make_backend(good_response)
         result = Checker(backend=backend, rubric=rubric, model="test-model").check_task(task)
 
-        out = task / "check-result.json"
+        out = task / RESULT
         assert out.is_file()
         saved = json.loads(out.read_text(encoding="utf-8"))
         first = rubric.criteria[0].name
@@ -94,7 +98,7 @@ class TestCheckTask:
         assert result == saved
 
     def _write_check_sidecar(self, task, *, model):
-        write_sidecar(task, "check-result.meta.json", model=model,
+        write_sidecar(task, SIDECAR, model=model,
                       rubric_path=CHECK_RUBRIC)
 
     def test_existing_check_result_is_reused_without_backend_call(
@@ -106,7 +110,7 @@ class TestCheckTask:
             c.name: {"outcome": "pass", "explanation": "cached"}
             for c in rubric.criteria
         }}
-        (task / "check-result.json").write_text(
+        (task / RESULT).write_text(
             json.dumps(cached), encoding="utf-8"
         )
         self._write_check_sidecar(task, model="test-model")
@@ -122,7 +126,7 @@ class TestCheckTask:
         """坏缓存（outcome 非法）必须抛错，不能带病直通。"""
         from triage_kit.core.checker import Checker
 
-        (task / "check-result.json").write_text(
+        (task / RESULT).write_text(
             json.dumps({"checks": {"typos":
                 {"outcome": "bogus", "explanation": "x"}}}),
             encoding="utf-8",
@@ -163,7 +167,7 @@ class TestCheckTask:
             Checker(backend=make_backend(good_response), rubric=rubric,
                     model="glm-5.3").check_task(task)
         # 产物未被覆盖（sidecar model 仍是旧值）
-        meta = json.loads((task / "check-result.meta.json").read_text())
+        meta = json.loads((task / SIDECAR).read_text())
         assert meta["model"] == "glm-4.7"
 
         # force=True → 重跑覆盖
@@ -171,7 +175,7 @@ class TestCheckTask:
         Checker(backend=backend3, rubric=rubric, model="glm-5.3",
                 force=True).check_task(task)
         assert len(backend3.agent_prompts) == 1
-        meta = json.loads((task / "check-result.meta.json").read_text())
+        meta = json.loads((task / SIDECAR).read_text())
         assert meta["model"] == "glm-5.3"
 
         # 换 rubric（sha 变）→ 同样报错
@@ -192,7 +196,7 @@ class TestCheckTask:
         """M1: 旧版产物（无 sidecar）：视为无缓存重跑。"""
         from triage_kit.core.checker import Checker
 
-        (task / "check-result.json").write_text(
+        (task / RESULT).write_text(
             json.dumps({"checks": {}}), encoding="utf-8"
         )
         backend = make_backend(good_response)

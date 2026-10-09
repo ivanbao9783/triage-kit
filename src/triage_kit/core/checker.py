@@ -1,7 +1,9 @@
 """Task quality inspection: judge a Harbor task directory against a rubric.
 
 Mirrors the Analyzer pattern (same backend contract, same rubric compilation)
-but operates on task directories and writes <task_dir>/check-result.json.
+but operates on task directories and writes
+<task_dir>/triage-check-result.json (triage-kit's own naming — not a viewer
+contract, unlike analyze's analysis.json).
 """
 
 from pathlib import Path
@@ -38,8 +40,8 @@ class Checker:
         task_dir = Path(task_dir)
 
         cached = cache.resolve_cache(
-            cached_path=task_dir / "check-result.json",
-            sidecar_path=task_dir / "check-result.meta.json",
+            cached_path=task_dir / "triage-check-result.json",
+            sidecar_path=task_dir / "triage-check-result.meta.json",
             force=self.force,
             identity=self._identity(),
             schema=self._response_schema,
@@ -67,6 +69,6 @@ class Checker:
         )
         result = self._response_schema.model_validate(raw).model_dump(mode="json")
 
-        cache.write_json(task_dir / "check-result.json", result)
-        cache.write_json(task_dir / "check-result.meta.json", self._identity())
+        cache.write_json(task_dir / "triage-check-result.json", result)
+        cache.write_json(task_dir / "triage-check-result.meta.json", self._identity())
         return result
