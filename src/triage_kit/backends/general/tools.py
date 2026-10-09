@@ -42,6 +42,9 @@ class GeneralTools:
     _TRUNCATION_MARKER = "... [line truncated]"
     # Refuse to slurp huge files into memory / the LLM context at all.
     MAX_FILE_BYTES = 10 * 1024 * 1024
+    # Cap match output; truncation is annotated (never silent) so the
+    # model knows to narrow the pattern instead of assuming completeness.
+    MAX_GREP_MATCHES = 200
 
     def read_file(self, path: str, *, offset: int = 0, limit: int = 2000) -> str:
         try:
@@ -60,9 +63,9 @@ class GeneralTools:
             return f"Error: {e}"
         lines = text.splitlines()[offset : offset + limit]
         truncated = [
-            l if len(l) <= self.MAX_LINE_CHARS
-            else l[: self.MAX_LINE_CHARS] + self._TRUNCATION_MARKER
-            for l in lines
+            line if len(line) <= self.MAX_LINE_CHARS
+            else line[: self.MAX_LINE_CHARS] + self._TRUNCATION_MARKER
+            for line in lines
         ]
         return "\n".join(truncated)
 
@@ -115,7 +118,13 @@ class GeneralTools:
                     results.append(f"{rel}:{lineno}:{line}")
         if not results:
             return "No matches found."
-        return "\n".join(results[:200])
+        if len(results) > self.MAX_GREP_MATCHES:
+            omitted = len(results) - self.MAX_GREP_MATCHES
+            return "\n".join(
+                results[: self.MAX_GREP_MATCHES]
+                + [f"... ({omitted} more matches omitted)"]
+            )
+        return "\n".join(results)
 
     def _display(self, absolute: Path) -> str:
         """Relative to cwd when inside it; always '/'-separated."""

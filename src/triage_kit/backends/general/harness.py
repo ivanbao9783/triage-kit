@@ -18,9 +18,11 @@ CLI demo::
 
 import json
 import logging
+from pathlib import Path
 
 from triage_kit.backends.general.tools import GeneralTools
 from triage_kit.core.contract import AgentMeta
+from triage_kit.core.schema import to_json_schema_dict
 
 logger = logging.getLogger(__name__)
 
@@ -98,13 +100,6 @@ _TOOL_SPECS = [
 ]
 
 
-def _schema_dict(output_schema) -> dict:
-    """Accept a pydantic model class or a plain JSON-schema dict."""
-    if hasattr(output_schema, "model_json_schema"):
-        return output_schema.model_json_schema()
-    return dict(output_schema)
-
-
 class GeneralHarness:
     """AgentBackend over any OpenAI-compatible chat-completions client."""
 
@@ -122,8 +117,6 @@ class GeneralHarness:
         output_schema=None,
         max_turns: int = 15,
     ):
-        from pathlib import Path
-
         model = model or self.default_model
         tools_impl = GeneralTools(cwd=Path(cwd), add_dirs=add_dirs)
         logger.info(
@@ -132,7 +125,7 @@ class GeneralHarness:
         )
 
         if output_schema is not None:
-            final_schema = _schema_dict(output_schema)
+            final_schema = to_json_schema_dict(output_schema)
         else:
             final_schema = _LOOSE_SCHEMA
         tool_specs = _TOOL_SPECS + [
@@ -263,8 +256,12 @@ class GeneralHarness:
             messages=[{"role": "user", "content": prompt}],
         )
         usage = getattr(resp, "usage", None)
+        # Some endpoints omit content on tool-only/plain turns; the
+        # aggregation layer expects a str (its empty-summary check is the
+        # intended error path for blank responses).
+        text = resp.choices[0].message.content or ""
         return (
-            resp.choices[0].message.content,
+            text,
             AgentMeta(
                 n_turns=1,
                 n_input_tokens=(getattr(usage, "prompt_tokens", 0) or None)

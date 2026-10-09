@@ -313,4 +313,5 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **check 文案与上游的可同步性**：check.txt 仅改首句（"Pier task"→"a Harbor task"），其余逐字节保留，将来 Harbor 上游 rubric/prompt 更新可 diff 同步
 - **样本预判**：现有样本两个 trial 均 reward=1，`--failing` 筛出 0 个——首批实际用法是全量 analyze + 重点关注 `reward_hacking` check（"通过的 trial 也可能作弊"恰是这套 rubric 最独特的价值）
 - **血缘法律留痕**：NOTICE 注明资产派生自 Harbor（Apache 2.0，vendored via pier），与 pier 的做法一致；assets 内容逐字节保留，命名层完全去 pier 化
+- **assets 解析假定源码树布局**：`core/assets.py` 以包位置回溯仓库根的 `assets/` 目录，仅在 `pip install -e`（editable）安装下成立；正式 wheel 安装后 assets 不随行，`triage` 命令会报 asset not found。当前 README 仅演示 editable 安装，与此假定一致；发布到 PyPI 前需将 assets 声明为包数据并改用包资源解析（`importlib.resources`）
 - **rubric 质量的既知局限**：default rubric 为标准 Harbor 模板任务（harbor init 脚手架形态）设计，对高工程化数据集（如 DeepSWE）存在已知误判点（#3/#4/#5/#7/#11，详见 KNOWN-ISSUES backlog）——首期接受这些误判（check 首要目标是打通流程），家族 rubric + 确定性前置层在第二批逐步消化；check 的真实价值场景是**新任务入库门禁**，而非给成熟数据集复检（成熟数据集已有 tripwire/CI 同步等自有质量工程，边际价值低）

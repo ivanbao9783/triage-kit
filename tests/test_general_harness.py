@@ -165,6 +165,15 @@ class TestQuery:
             {"role": "user", "content": "aggregate"}
         ]
 
+    def test_plain_query_none_content_becomes_empty_string(self):
+        """H5: content=None（部分端点不给 content）兜底为 ''，不向上抛 None。"""
+        from triage_kit.backends.general.harness import GeneralHarness
+
+        client = FakeClient([response(content=None)])
+        harness = GeneralHarness(client, default_model="m1")
+        text, _meta = harness.query("aggregate", model="m1")
+        assert text == ""
+
 
 class TestDemoScenarios:
     """Formalized from scripts/demo_general_harness.py — end-to-end

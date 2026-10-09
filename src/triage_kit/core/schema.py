@@ -15,6 +15,17 @@ from pydantic import BaseModel, create_model
 from triage_kit.core.rubric import QualityCheck, Rubric
 
 
+def to_json_schema_dict(output_schema) -> dict:
+    """Coerce an output schema (pydantic class or plain dict) to a dict.
+
+    Harnesses hand schemas to SDKs that want plain JSON-schema dicts;
+    the contract itself accepts pydantic classes for validation.
+    """
+    if hasattr(output_schema, "model_json_schema"):
+        return output_schema.model_json_schema()
+    return dict(output_schema)
+
+
 def _checks_schema(schema_name: str, rubric: Rubric) -> type[BaseModel]:
     """Build a `{<criterion>: QualityCheck}` schema with one field per criterion."""
     fields = {

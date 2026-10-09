@@ -177,9 +177,15 @@ def check(
         None, "--rubric", "-r",
         help="Rubric file path or family name (default: check-default).",
     ),
-    backend: str = typer.Option("general", "--backend"),
-    model: str = typer.Option(None, "--model", "-m"),
-    base_url: str = typer.Option(None, "--base-url"),
+    backend: str = typer.Option(
+        "general", "--backend", help="general | claude."
+    ),
+    model: str = typer.Option(
+        None, "--model", "-m", help="Model name for the chosen backend."
+    ),
+    base_url: str = typer.Option(
+        None, "--base-url", help="OpenAI-compatible endpoint override."
+    ),
     force: bool = typer.Option(
         False, "--force", "-f",
         help="Re-check even if cached check-result.json exists (overwrites).",

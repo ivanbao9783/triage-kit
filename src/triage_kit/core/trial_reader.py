@@ -21,19 +21,24 @@ def _read_result(trial_dir: Path) -> dict:
     return json.loads((Path(trial_dir) / "result.json").read_text(encoding="utf-8"))
 
 
+def _verifier_reward(result: dict):
+    """Main reward from verifier_result.rewards.reward (None if absent)."""
+    rewards = (result.get("verifier_result") or {}).get("rewards") or {}
+    return rewards.get("reward")
+
+
 def read_reward(trial_dir: Path) -> float | None:
     """Return the trial's main reward, or None if absent."""
-    result = _read_result(trial_dir)
-    rewards = (result.get("verifier_result") or {}).get("rewards") or {}
-    reward = rewards.get("reward")
+    reward = _verifier_reward(_read_result(trial_dir))
     return float(reward) if reward is not None else None
 
 
 def _is_passing(trial_dir: Path) -> bool:
     result = _read_result(trial_dir)
-    rewards = (result.get("verifier_result") or {}).get("rewards") or {}
-    reward = rewards.get("reward")
-    return reward == 1 and result.get("exception_info") is None
+    return (
+        _verifier_reward(result) == 1
+        and result.get("exception_info") is None
+    )
 
 
 def list_trials(job_dir: Path, *, failing_only: bool = False) -> list[Path]:

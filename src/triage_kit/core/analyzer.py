@@ -9,7 +9,7 @@ import json
 import logging
 from pathlib import Path
 
-from triage_kit.core import trial_reader
+from triage_kit.core import cache, trial_reader
 from triage_kit.core.assets import get_asset
 from triage_kit.core.rubric import Rubric, build_criteria_guidance
 from triage_kit.core.schema import build_analyze_response_schema
@@ -52,10 +52,6 @@ def _render_analysis_md(analysis: dict) -> str:
     return "\n".join(lines)
 
 
-def _write_json(path: Path, data: dict) -> None:
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
 class Analyzer:
     """Attribution analysis over trials (single) and jobs (aggregate)."""
 
@@ -77,35 +73,15 @@ class Analyzer:
     def analyze_trial(self, trial_dir: Path, *, task_dir: Path | None = None) -> dict:
         trial_dir = Path(trial_dir)
 
-        cached = trial_dir / "analysis.json"
-        sidecar = trial_dir / "analysis.meta.json"
-        if cached.is_file() and not self.force:
-            if sidecar.is_file():
-                meta = json.loads(sidecar.read_text(encoding="utf-8"))
-                if meta.get("rubric_sha256") != self.rubric.source_sha256:
-                    raise ValueError(
-                        f"cached {cached.name} in {trial_dir} was produced with a "
-                        f"different rubric (cached sha {meta.get('rubric_sha256')}, "
-                        f"requested {self.rubric.source_sha256}); "
-                        f"rerun with --force to overwrite"
-                    )
-                if meta.get("model") != self.model:
-                    raise ValueError(
-                        f"cached {cached.name} in {trial_dir} was produced with "
-                        f"model {meta.get('model')!r}, requested {self.model!r}; "
-                        f"rerun with --force to overwrite"
-                    )
-                # Cached products must pass the same response schema as fresh
-                # backend responses — a corrupted/hand-edited/half-written
-                # file must not flow into job aggregation unchecked.
-                return self._response_schema.model_validate(
-                    json.loads(cached.read_text(encoding="utf-8"))
-                ).model_dump(mode="json")
-            logger.warning(
-                "analysis.json exists without analysis.meta.json in %s "
-                "(legacy product); treating as a cache miss and re-analyzing",
-                trial_dir,
-            )
+        cached = cache.resolve_cache(
+            cached_path=trial_dir / "analysis.json",
+            sidecar_path=trial_dir / "analysis.meta.json",
+            force=self.force,
+            identity=self._identity(),
+            schema=self._response_schema,
+        )
+        if cached is not None:
+            return cached
 
         task_dir = trial_reader.extract_task_dir(trial_dir, override=task_dir)
         prompt = self._template.format(
@@ -128,11 +104,11 @@ class Analyzer:
                 f"to a different trial"
             )
 
-        _write_json(trial_dir / "analysis.json", analysis)
+        cache.write_json(trial_dir / "analysis.json", analysis)
         (trial_dir / "analysis.md").write_text(
             _render_analysis_md(analysis), encoding="utf-8"
         )
-        _write_json(trial_dir / "analysis.meta.json", self._identity())
+        cache.write_json(trial_dir / "analysis.meta.json", self._identity())
         return analysis
 
     def analyze_job(self, job_dir: Path, *, failing_only: bool = False) -> dict:
@@ -158,7 +134,7 @@ class Analyzer:
         summary, _meta = self.backend.query(prompt, model=self.model)
         if not summary.strip():
             raise ValueError(
-                f"job aggregation returned an empty summary "
+                "job aggregation returned an empty summary "
                 f"(job={job_dir.name}); refusing to write analysis.json"
             )
 
@@ -167,7 +143,7 @@ class Analyzer:
             "trials": trial_results,
             "failed_trials": failed_trials,
         }
-        _write_json(job_dir / "analysis.json", result)
+        cache.write_json(job_dir / "analysis.json", result)
         (job_dir / "analysis.md").write_text(
             f"# Job Analysis\n\n{summary}\n", encoding="utf-8"
         )

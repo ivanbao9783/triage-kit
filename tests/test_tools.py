@@ -160,3 +160,18 @@ class TestGrep:
     def test_no_match_reports_it(self, env):
         tools = make_tools(env)
         assert "No matches" in tools.grep("nothing-matches-this")
+
+    def test_match_cap_is_annotated_not_silent(self, env):
+        """#E: 超出上限的匹配被截断时必须有显式标注（截断不静默）。"""
+        tools = make_tools(env)
+        cwd, _ = env
+        big = cwd / "big.log"
+        big.write_text(
+            "\n".join(f"hit number {i}" for i in range(250)),
+            encoding="utf-8",
+        )
+
+        out = tools.grep("hit number")
+        lines = out.splitlines()
+        assert len(lines) == 201  # 200 matches + 1 annotation
+        assert lines[-1] == "... (50 more matches omitted)"
