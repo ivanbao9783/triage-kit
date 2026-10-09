@@ -1,14 +1,10 @@
 """Tests for triage_kit.core.analyzer — driven by a FakeBackend, no LLM."""
 
 import json
-from pathlib import Path
 
 import pytest
 
-from tests.test_trial_reader import make_trial
-
-REPO_ROOT = Path(__file__).parent.parent
-ANALYZE_RUBRIC = REPO_ROOT / "assets" / "analyze" / "analyze-rubric.toml"
+from tests.conftest import ANALYZE_RUBRIC, make_trial, write_sidecar
 
 
 def make_backend(response: dict):
@@ -82,25 +78,6 @@ def rubric_file():
     return ANALYZE_RUBRIC
 
 
-def _write_sidecar(directory, name, *, model, rubric_path=ANALYZE_RUBRIC):
-    """Write an identity sidecar matching the given rubric file + model."""
-    import hashlib
-
-    sha = hashlib.sha256(Path(rubric_path).read_bytes()).hexdigest()
-    (Path(directory) / name).write_text(
-        json.dumps({"rubric_sha256": sha, "model": model}), encoding="utf-8"
-    )
-
-
-class TestAssetsResolution:
-    def test_analyze_template_is_found(self):
-        from triage_kit.core.assets import get_asset
-
-        template = get_asset("analyze/analyze.txt")
-        assert template.is_file()
-        assert "{task_section}" in template.read_text(encoding="utf-8")
-
-
 class TestAnalyzeTrial:
     def test_prompt_contains_guidance_and_degraded_task_section(
         self, trial, rubric
@@ -171,12 +148,12 @@ class TestAnalyzeTrial:
 
     def test_existing_analysis_is_reused_without_backend_call(self, trial, rubric):
         from triage_kit.core.analyzer import Analyzer
-        import hashlib
 
         cached = {"trial_name": "demo__abc123", "summary": "cached",
                   "checks": GOOD_RESPONSE["checks"]}
         (trial / "analysis.json").write_text(json.dumps(cached), encoding="utf-8")
-        _write_sidecar(trial, "analysis.meta.json", model="test-model")
+        write_sidecar(trial, "analysis.meta.json", model="test-model",
+                      rubric_path=ANALYZE_RUBRIC)
 
         backend = make_backend(GOOD_RESPONSE)
         result = Analyzer(backend=backend, rubric=rubric, model="test-model").analyze_trial(trial)
@@ -244,8 +221,8 @@ class TestAnalyzeJob:
             encoding="utf-8",
         )
         # 身份匹配的 sidecar：确保走的是"校验拒绝"而非"无 sidecar 重跑"
-        _write_sidecar(tmp_path / "t2__corrupt", "analysis.meta.json",
-                       model="test-model")
+        write_sidecar(tmp_path / "t2__corrupt", "analysis.meta.json",
+                      model="test-model", rubric_path=ANALYZE_RUBRIC)
 
         backend = make_backend(dict(GOOD_RESPONSE, trial_name="t1__good"))
         result = Analyzer(
@@ -395,7 +372,6 @@ class TestAnalyzeJob:
 
     def test_single_trial_failure_does_not_abort_job(self, tmp_path, rubric):
         from triage_kit.core.analyzer import Analyzer
-        from triage_kit.core.contract import AgentMeta
 
         make_trial(tmp_path / "t1__aaa", reward=0.0)
         make_trial(tmp_path / "t2__bbb", reward=0.0)
@@ -405,23 +381,7 @@ class TestAnalyzeJob:
         good = {"trial_name": "t2__bbb", "summary": "ok",
                 "checks": GOOD_RESPONSE["checks"]}
 
-        class SeqBackend:
-            def __init__(self):
-                self.responses = [bad, good]
-                self.agent_prompts: list[str] = []
-                self.plain_prompts: list[str] = []
-
-            def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                            output_schema=None, max_turns=15):
-                self.agent_prompts.append(prompt)
-                return (self.responses[len(self.agent_prompts) - 1],
-                        AgentMeta(n_turns=2, model=model))
-
-            def query(self, prompt, *, model):
-                self.plain_prompts.append(prompt)
-                return "JOB SUMMARY", AgentMeta(n_turns=0, model=model)
-
-        backend = SeqBackend()
+        backend = make_backend_seq([bad, good])
         result = Analyzer(backend=backend, rubric=rubric, model="test-model").analyze_job(tmp_path)
 
         # t1 failed validation, t2 still analyzed, aggregation still happened

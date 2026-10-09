@@ -1,14 +1,10 @@
 """Tests for triage_kit.core.checker — task quality inspection, FakeBackend-driven."""
 
 import json
-from pathlib import Path
 
 import pytest
 
-from tests.test_task_reader import make_task
-
-REPO_ROOT = Path(__file__).parent.parent
-CHECK_RUBRIC = REPO_ROOT / "assets" / "check" / "rubrics" / "check-default.toml"
+from tests.conftest import CHECK_RUBRIC, make_task, write_sidecar
 
 
 def make_backend(response: dict):
@@ -56,15 +52,6 @@ def good_response(rubric):
     }
 
 
-class TestAssetsResolution:
-    def test_check_template_is_found(self):
-        from triage_kit.core.assets import get_asset
-
-        template = get_asset("check/check.txt")
-        assert template.is_file()
-        assert "{file_tree}" in template.read_text(encoding="utf-8")
-
-
 class TestCheckTask:
     def test_prompt_contains_file_tree_and_guidance(self, task, rubric, good_response):
         from triage_kit.core.checker import Checker
@@ -107,13 +94,8 @@ class TestCheckTask:
         assert result == saved
 
     def _write_check_sidecar(self, task, *, model):
-        import hashlib
-
-        sha = hashlib.sha256(CHECK_RUBRIC.read_bytes()).hexdigest()
-        (task / "check-result.meta.json").write_text(
-            json.dumps({"rubric_sha256": sha, "model": model}),
-            encoding="utf-8",
-        )
+        write_sidecar(task, "check-result.meta.json", model=model,
+                      rubric_path=CHECK_RUBRIC)
 
     def test_existing_check_result_is_reused_without_backend_call(
         self, task, rubric, good_response
@@ -164,3 +146,59 @@ class TestCheckTask:
         backend = make_backend(bad)
         with pytest.raises(Exception):
             Checker(backend=backend, rubric=rubric, model="test-model").check_task(task)
+
+    def test_identity_mismatch_errors_and_force_overrides(
+        self, task, rubric, good_response
+    ):
+        """M1: 身份链路对齐 Analyzer——换 model/rubric 报错提示 --force，
+        force 重跑覆盖，不误覆盖。"""
+        from triage_kit.core.checker import Checker
+        from triage_kit.core.rubric import load_rubric
+
+        Checker(backend=make_backend(good_response), rubric=rubric,
+                model="glm-4.7").check_task(task)
+
+        # 换 model → 报错提示 force
+        with pytest.raises(ValueError, match="force"):
+            Checker(backend=make_backend(good_response), rubric=rubric,
+                    model="glm-5.3").check_task(task)
+        # 产物未被覆盖（sidecar model 仍是旧值）
+        meta = json.loads((task / "check-result.meta.json").read_text())
+        assert meta["model"] == "glm-4.7"
+
+        # force=True → 重跑覆盖
+        backend3 = make_backend(good_response)
+        Checker(backend=backend3, rubric=rubric, model="glm-5.3",
+                force=True).check_task(task)
+        assert len(backend3.agent_prompts) == 1
+        meta = json.loads((task / "check-result.meta.json").read_text())
+        assert meta["model"] == "glm-5.3"
+
+        # 换 rubric（sha 变）→ 同样报错
+        other_file = task.parent / "other-rubric.toml"
+        other_file.write_text(
+            CHECK_RUBRIC.read_text() + '\n[[criteria]]\nname = "extra"\n'
+            'description = "d"\nguidance = "g"\n',
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="rubric"):
+            Checker(backend=make_backend(good_response),
+                    rubric=load_rubric(other_file),
+                    model="glm-5.3").check_task(task)
+
+    def test_cache_without_sidecar_is_treated_as_miss(
+        self, task, rubric, good_response
+    ):
+        """M1: 旧版产物（无 sidecar）：视为无缓存重跑。"""
+        from triage_kit.core.checker import Checker
+
+        (task / "check-result.json").write_text(
+            json.dumps({"checks": {}}), encoding="utf-8"
+        )
+        backend = make_backend(good_response)
+        result = Checker(backend=backend, rubric=rubric,
+                         model="test-model").check_task(task)
+
+        assert len(backend.agent_prompts) == 1   # reran
+        first = rubric.criteria[0].name
+        assert result["checks"][first]["outcome"] == "pass"

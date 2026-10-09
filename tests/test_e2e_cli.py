@@ -15,13 +15,10 @@ import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
 import pytest
 
-from tests.test_trial_reader import make_trial
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from tests.conftest import REPO_ROOT, make_trial
 
 try:
     import openai  # noqa: F401

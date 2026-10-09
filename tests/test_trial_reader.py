@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import make_trial
+
 REPO_ROOT = Path(__file__).parent.parent
 SAMPLE_JOB = REPO_ROOT.parent / "details"
 SAMPLE_TRIAL = SAMPLE_JOB / "ts-pattern-match-each__9giF4pL"
@@ -16,19 +18,6 @@ SAMPLE_TRIAL = SAMPLE_JOB / "ts-pattern-match-each__9giF4pL"
 needs_sample = pytest.mark.skipif(
     not SAMPLE_JOB.exists(), reason="real sample job dir not present"
 )
-
-
-def make_trial(path: Path, *, reward: float, exception: bool = False) -> None:
-    """Synthesize a minimal Harbor-layout trial directory."""
-    path.mkdir(parents=True)
-    (path / "trial.log").write_text("", encoding="utf-8")
-    result = {
-        "trial_name": path.name,
-        "config": {"task": {"path": "/nonexistent/task"}},
-        "verifier_result": {"rewards": {"reward": reward}},
-        "exception_info": "boom" if exception else None,
-    }
-    (path / "result.json").write_text(json.dumps(result), encoding="utf-8")
 
 
 class TestDirClassification:
@@ -102,3 +91,14 @@ class TestReward:
         from triage_kit.core.trial_reader import read_reward
 
         assert read_reward(SAMPLE_TRIAL) == 1.0
+
+    def test_missing_rewards_returns_none(self, tmp_path):
+        """M6: rewards/verifier_result 缺失时容错返回 None，不抛错。"""
+        from triage_kit.core.trial_reader import read_reward
+
+        t = tmp_path / "t"
+        t.mkdir()
+        (t / "result.json").write_text(
+            json.dumps({"trial_name": "t"}), encoding="utf-8"
+        )
+        assert read_reward(t) is None

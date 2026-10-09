@@ -4,9 +4,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).parent.parent
-CHECK_RUBRIC = REPO_ROOT / "assets" / "check" / "rubrics" / "check-default.toml"
-ANALYZE_RUBRIC = REPO_ROOT / "assets" / "analyze" / "analyze-rubric.toml"
+from tests.conftest import ANALYZE_RUBRIC, CHECK_RUBRIC
 
 
 class TestCheckOutcome:

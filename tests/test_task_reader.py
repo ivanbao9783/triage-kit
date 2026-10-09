@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import make_task
+
 REPO_ROOT = Path(__file__).parent.parent
 REAL_TASK = REPO_ROOT.parent / "deep-swe" / "tasks" / "ts-pattern-match-each"
 TASKS_ROOT = REPO_ROOT.parent / "deep-swe" / "tasks"
@@ -11,23 +13,6 @@ TASKS_ROOT = REPO_ROOT.parent / "deep-swe" / "tasks"
 needs_task = pytest.mark.skipif(
     not REAL_TASK.exists(), reason="real deep-swe task dir not present"
 )
-
-
-def make_task(path: Path, *, with_steps: bool = False) -> None:
-    """Synthesize a minimal Harbor-layout task directory."""
-    (path / "environment").mkdir(parents=True)
-    (path / "environment" / "Dockerfile").write_text("FROM busybox\n", encoding="utf-8")
-    (path / "instruction.md").write_text("Do the thing.\n", encoding="utf-8")
-    if with_steps:
-        (path / "steps" / "step-1" / "instruction.md").parent.mkdir(parents=True)
-        (path / "steps" / "step-1" / "instruction.md").write_text(
-            "Step one.\n", encoding="utf-8"
-        )
-        (path / "task.toml").write_text(
-            '[[steps]]\nname = "step-1"\n', encoding="utf-8"
-        )
-    else:
-        (path / "task.toml").write_text("[task]\n", encoding="utf-8")
 
 
 class TestValidateTaskDir:

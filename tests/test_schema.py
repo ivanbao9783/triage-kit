@@ -1,12 +1,8 @@
 """Tests for triage_kit.core.schema — dynamic response schemas compiled from rubrics."""
 
-from pathlib import Path
-
 import pytest
 
-REPO_ROOT = Path(__file__).parent.parent
-CHECK_RUBRIC = REPO_ROOT / "assets" / "check" / "rubrics" / "check-default.toml"
-ANALYZE_RUBRIC = REPO_ROOT / "assets" / "analyze" / "analyze-rubric.toml"
+from tests.conftest import ANALYZE_RUBRIC, CHECK_RUBRIC
 
 
 class TestBuildAnalyzeResponseSchema:
@@ -63,6 +59,27 @@ class TestBuildAnalyzeResponseSchema:
         }
         with pytest.raises(Exception):
             schema.model_validate(incomplete)
+
+
+class TestToJsonSchemaDict:
+    """M5a: the coercion shared by both harnesses (#B) gets direct tests."""
+
+    def test_pydantic_model_is_converted(self):
+        from pydantic import BaseModel
+
+        from triage_kit.core.schema import to_json_schema_dict
+
+        class Mini(BaseModel):
+            x: int
+
+        schema = to_json_schema_dict(Mini)
+        assert schema["properties"]["x"]["type"] == "integer"
+
+    def test_plain_dict_passes_through(self):
+        from triage_kit.core.schema import to_json_schema_dict
+
+        plain = {"type": "object", "properties": {}}
+        assert to_json_schema_dict(plain) == plain
 
 
 class TestBuildCheckResponseSchema:

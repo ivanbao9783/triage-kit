@@ -145,6 +145,8 @@ def analyze(
         _fail(f"path not found: {path}")
     if not path.is_dir():
         _fail(f"not a directory: {path}")
+    if task_dir is not None and not task_dir.exists():
+        _fail(f"--task-dir not found: {task_dir}")
 
     try:
         effective_model = _resolve_model(backend, "analyze", model)

@@ -5,12 +5,7 @@ Uses pytest's caplog against the harness logger; no network access.
 
 import logging
 
-from tests.test_general_harness import (
-    SUBMIT_RESULT,
-    FakeClient,
-    response,
-    tool_call,
-)
+from tests.conftest import SUBMIT_RESULT, FakeClient, response, tool_call
 
 
 class TestHarnessLogging:

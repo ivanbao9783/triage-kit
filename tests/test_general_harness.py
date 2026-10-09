@@ -5,42 +5,10 @@ whole agent loop (tool dispatch, sandbox wiring, forced submission, token
 accounting) is exercised without network access.
 """
 
-import json
-from types import SimpleNamespace
-
 import pytest
 
-SUBMIT_RESULT = {"trial_name": "t", "summary": "s", "answer": 42}
-
-
-class FakeClient:
-    """Mimics openai.OpenAI's chat.completions surface, scripted per call."""
-
-    def __init__(self, responses: list):
-        self.responses = list(responses)
-        self.calls: list[dict] = []
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=self._create)
-        )
-
-    def _create(self, **kwargs):
-        self.calls.append(kwargs)
-        return self.responses.pop(0)
-
-
-def tool_call(call_id: str, name: str, arguments: dict):
-    return SimpleNamespace(
-        id=call_id,
-        function=SimpleNamespace(name=name, arguments=json.dumps(arguments)),
-    )
-
-
-def response(tool_calls=None, content=None, p=10, c=5):
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
-    usage = SimpleNamespace(prompt_tokens=p, completion_tokens=c)
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=message)], usage=usage
-    )
+from tests.conftest import ANALYZE_RUBRIC, FakeClient, SUBMIT_RESULT, \
+    make_trial, response, tool_call
 
 
 class OutputModel:
@@ -175,12 +143,10 @@ class TestQuery:
         assert text == ""
 
 
-class TestDemoScenarios:
-    """Formalized from scripts/demo_general_harness.py — end-to-end
-    regression scenarios. Demo 2 (forced submission) and demo 3 (plain
-    query) are covered by test_forces_submit_on_final_turn and
-    test_plain_query_returns_text above; the multi-tool sequence below is
-    the scenario the other tests don't exercise."""
+class TestMultiToolScenario:
+    """Formalized from scripts/demo_general_harness.py: a multi-tool
+    sequence (glob -> read_file -> submit) flowing through the loop —
+    the scenario the single-tool tests above don't exercise."""
 
     def test_glob_read_submit_scenario(self, workdir):
         from triage_kit.backends.general.harness import GeneralHarness
@@ -228,9 +194,8 @@ class TestContractIntegration:
     (M4, built against a FakeBackend) runs unchanged on top of it."""
 
     def test_analyzer_runs_on_general_harness(self, workdir):
-        from pathlib import Path
+        import json
 
-        from tests.test_trial_reader import make_trial
         from triage_kit.backends.general.harness import GeneralHarness
         from triage_kit.core.analyzer import Analyzer
         from triage_kit.core.rubric import load_rubric
@@ -254,10 +219,7 @@ class TestContractIntegration:
         harness = GeneralHarness(client, default_model="m1")
         analyzer = Analyzer(
             backend=harness,
-            rubric=load_rubric(
-                Path(__file__).parent.parent / "assets" / "analyze"
-                / "analyze-rubric.toml"
-            ),
+            rubric=load_rubric(ANALYZE_RUBRIC),
             model="m1",
         )
         result = analyzer.analyze_trial(trial)

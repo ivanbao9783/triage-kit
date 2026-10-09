@@ -11,12 +11,24 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from tests.test_task_reader import make_task
-from tests.test_trial_reader import make_trial
-
-REPO_ROOT = Path(__file__).parent.parent
+from tests.conftest import make_task, make_trial
 
 runner = CliRunner()
+
+
+def _patch_openai_with_fake(monkeypatch):
+    """Swap sys.modules['openai'] for a capture stub; returns captured kwargs."""
+    import sys
+
+    captured = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setitem(sys.modules, "openai", type(sys)("openai"))
+    sys.modules["openai"].OpenAI = FakeOpenAI
+    return captured
 
 
 def make_fake_backend():
@@ -199,6 +211,19 @@ class TestAnalyzeCommand:
         saved = json.loads((trial / "analysis.json").read_text(encoding="utf-8"))
         assert "only_one" in saved["checks"]
 
+    def test_task_dir_option_nonexistent_errors(self, fake_backend, trial,
+                                                  tmp_path):
+        """M6: --task-dir 指向不存在的目录必须显式报错，
+        而非让 prompt 声称一个假路径。"""
+        from triage_kit.cli import app
+
+        result = runner.invoke(
+            app, ["analyze", str(trial), "--task-dir", str(tmp_path / "nope"),
+                  "--model", "m1"]
+        )
+        assert result.exit_code != 0
+        assert "task-dir" in result.output
+
     def test_invalid_path_errors(self, fake_backend, tmp_path):
         from triage_kit.cli import app
 
@@ -253,8 +278,6 @@ class TestModelValidation:
         assert fake_backend.calls[0]["model"] == "haiku"
 
     def test_claude_check_defaults_to_sonnet(self, fake_backend, tmp_path):
-        from tests.test_task_reader import make_task
-
         from triage_kit.cli import app
 
         task = tmp_path / "task"
@@ -313,6 +336,23 @@ class TestCheckCommand:
         )
         assert list(saved["checks"]) == ["one_check"]
 
+    def test_missing_path_errors(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        result = runner.invoke(
+            app, ["check", str(tmp_path / "nope"), "--model", "m1"]
+        )
+        assert result.exit_code != 0
+
+    def test_invalid_task_dir_errors(self, fake_backend, tmp_path):
+        """M2: 无 task.toml 的目录不是合法任务 → 非零退出。"""
+        from triage_kit.cli import app
+
+        empty = tmp_path / "not-a-task"
+        empty.mkdir()
+        result = runner.invoke(app, ["check", str(empty), "--model", "m1"])
+        assert result.exit_code != 0
+
 
 class TestBackendSelection:
     def test_invalid_backend_name_errors(self, monkeypatch, trial):
@@ -334,33 +374,16 @@ class TestBackendSelection:
         """The real factory maps names to harnesses with model plumbing."""
         import triage_kit.cli as cli
 
-        captured = {}
-
-        class FakeOpenAI:
-            def __init__(self, **kwargs):
-                captured.update(kwargs)
-
-        import sys
-        monkeypatch.setitem(sys.modules, "openai",
-                             type(sys)("openai"))
-        sys.modules["openai"].OpenAI = FakeOpenAI
+        captured = _patch_openai_with_fake(monkeypatch)
 
         harness = cli.build_backend("general", "glm-4.7", None)
         assert harness.default_model == "glm-4.7"
         assert "base_url" not in captured  # default endpoint
 
     def test_backend_factory_base_url(self, monkeypatch):
-        import sys
         import triage_kit.cli as cli
 
-        captured = {}
-
-        class FakeOpenAI:
-            def __init__(self, **kwargs):
-                captured.update(kwargs)
-
-        monkeypatch.setitem(sys.modules, "openai", type(sys)("openai"))
-        sys.modules["openai"].OpenAI = FakeOpenAI
+        captured = _patch_openai_with_fake(monkeypatch)
 
         cli.build_backend("general", "m", "https://api.example.com/v1")
         assert captured["base_url"] == "https://api.example.com/v1"

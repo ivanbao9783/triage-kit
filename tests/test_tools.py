@@ -149,6 +149,50 @@ class TestGlob:
         tools = make_tools(env)
         assert "No files" in tools.glob("**/*.toml")
 
+    def test_entry_cap_is_annotated_not_silent(self, env):
+        """M3: glob 超上限必须显式标注（与 grep/file_tree 截断哲学一致）。"""
+        tools = make_tools(env)
+        cwd, _ = env
+        for i in range(250):
+            (cwd / f"f{i}.txt").write_text("x", encoding="utf-8")
+
+        out = tools.glob("**/*.txt")
+        lines = out.splitlines()
+        assert len(lines) == 201  # 200 entries + 1 annotation
+        assert lines[-1] == "... (50 more entries omitted)"
+
+
+class TestReadFilePagination:
+    """M4: offset/limit 是模型分页读大文件的唯一通道。"""
+
+    def test_offset_skips_lines(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        f = cwd / "lines.txt"
+        f.write_text("\n".join(f"line{i}" for i in range(10)),
+                     encoding="utf-8")
+
+        assert tools.read_file("lines.txt", offset=8) == "line8\nline9"
+
+    def test_limit_caps_lines(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        f = cwd / "lines.txt"
+        f.write_text("\n".join(f"line{i}" for i in range(10)),
+                     encoding="utf-8")
+
+        assert tools.read_file("lines.txt", limit=3) == "line0\nline1\nline2"
+
+    def test_offset_and_limit_combine(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        f = cwd / "lines.txt"
+        f.write_text("\n".join(f"line{i}" for i in range(10)),
+                     encoding="utf-8")
+
+        assert tools.read_file("lines.txt", offset=2, limit=3) == \
+            "line2\nline3\nline4"
+
 
 class TestGrep:
     def test_returns_matching_lines_with_location(self, env):

@@ -45,6 +45,9 @@ class GeneralTools:
     # Cap match output; truncation is annotated (never silent) so the
     # model knows to narrow the pattern instead of assuming completeness.
     MAX_GREP_MATCHES = 200
+    # Same philosophy for directory listings: a broad pattern over a big
+    # tree must not flood the context without saying so.
+    MAX_GLOB_ENTRIES = 200
 
     def read_file(self, path: str, *, offset: int = 0, limit: int = 2000) -> str:
         try:
@@ -83,7 +86,14 @@ class GeneralTools:
                 seen.append(normalized)
         if not seen:
             return "No files found."
-        return "\n".join(sorted(seen))
+        entries = sorted(seen)
+        if len(entries) > self.MAX_GLOB_ENTRIES:
+            omitted = len(entries) - self.MAX_GLOB_ENTRIES
+            return "\n".join(
+                entries[: self.MAX_GLOB_ENTRIES]
+                + [f"... ({omitted} more entries omitted)"]
+            )
+        return "\n".join(entries)
 
     def grep(self, pattern: str, path: str = ".", glob: str | None = None) -> str:
         try:
