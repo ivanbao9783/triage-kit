@@ -143,6 +143,7 @@ The five prompt/rubric files are frozen byte-for-byte against their pier origina
 
 - trae harness SKILL.md asset pack (M8)
 - family rubrics (e.g. `deep-swe`) shipped under `assets/check/rubrics/`
+- parallel trial analysis (`-j/--jobs`, default 1) — trials are analyzed strictly sequentially today (~1 min/trial with a fast model); the loop body is already dependency-free, so a thread pool would cut a 113-trial job from ~2h to ~15min at `-j 8`
 
 ## Development
 
