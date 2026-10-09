@@ -314,6 +314,10 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **claude 后端禁读缺口**：judge 禁读机制（第七节）仅覆盖 general 后端；claude 委托 Agent SDK 执行工具（`bypassPermissions`），不经过本地沙箱。待立项
 - **并发无限流调度**：`-j/--jobs` 为固定线程数，无 429 自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
+- **forcing 路径与推理端点不兼容**：turn 预算耗尽时 harness 以 `tool_choice` 强制提交，DeepSeek 思考模式端点拒绝该参数直接 400——实测 46 个 badcase 中 16 个因此丢失判定（P008 立项待办）
+- **工具异常未隔离**：general harness 的工具分发点无异常边界，模型传错参数（如 glob 绝对路径 pattern）即炸掉整个 trial——实测 5 个 badcase 因此丢失判定；read_file/grep 已有 Error 字符串约定，glob 缺守卫（P009 立项待办）
+- **中文报告为翻译体**：`--lang zh` 的第二跳是英文报告的翻译（analyzer 内联 prompt），产出翻译腔中文，可读性差——需改为中文原生撰写（P011 立项待办）
+- **运行日志不落盘**：执行日志仅输出控制台，事后 debug（judge 读了什么/哪一轮失败）无据可查——需随产物持久化到 `triage-kit/`（P013 立项待办）
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐
 - **task 目录跨机失效是主路径**：Linux 产出的 result.json 拷贝到 Windows 后 task path 必然不可解析，task_section 的降级话术（"infer from trajectory"）在跨机场景是常态而非边缘；DeepSWE 样本中 mini-swe-agent 轨迹内嵌完整任务 prompt，降级路径实测可用，但不具普遍性
 - **job 模式不透传 --task-dir**：一个 job 的多个 trial 可能来自不同任务，单一路径无法覆盖
