@@ -11,24 +11,22 @@ triage-kit is extracted from the [pier](https://github.com/datacurve-ai/pier)-ec
 ## Quick start
 
 ```bash
-# 1. install (editable, from the repo root)
-pip install -e ".[general]"        # OpenAI-compatible backends (GLM / DeepSeek / Qwen / ...)
+# 1. install (from the repo root)
+pip install -e ".[general]"  # OpenAI-compatible backends (GLM / DeepSeek ...)
 
 # 2. provide credentials for your endpoint
 export OPENAI_API_KEY=...
 
 # 3. run over a Harbor job directory (failing trials only)
-triage analyze outputs/job/details --failing --backend general \
+triage analyze outputs/xxx/details --failing --backend general \
     --model deepseek-flash --base-url https://api.deepseek.com
 
-# 4. inspect the products — job overview first, then per-trial reports
-cat outputs/job/details/triage-kit/analysis.md            # job-level overview (aggregated verdicts)
-cat outputs/job/details/<trial>/triage-kit/analysis.md    # single-trial attribution (human-readable)
-cat outputs/job/details/<trial>/triage-kit/analysis.json # single-trial attribution (machine-readable)
+# 4. inspect the products
+cat outputs/xxx/details/triage-kit/analysis.md   # overview (aggregated verdicts)
 
 # 5. restore the evaluated directory when done
-triage clean outputs/job/details         # dry-run: list the product directories it would remove
-triage clean outputs/job/details --yes   # actually delete — original evaluation data stays untouched
+triage clean outputs/xxx/details         # dry-run: just list
+triage clean outputs/xxx/details --yes   # actually delete
 ```
 
 Add `--lang zh` to also get a Simplified-Chinese copy (`analysis.zh.md`) of every report.
@@ -36,9 +34,9 @@ Add `--lang zh` to also get a Simplified-Chinese copy (`analysis.zh.md`) of ever
 For task quality inspection before running an evaluation:
 
 ```bash
-triage check path/to/task --backend general \
+triage check path/to/tasks --backend general \
     --model deepseek-flash --base-url https://api.deepseek.com
-cat path/to/task/triage-kit/check-result.json
+cat path/to/tasks/triage-kit/check-result.json
 ```
 
 ## Installation
@@ -122,7 +120,7 @@ Both commands reuse cached products by default. A cache hit requires an identity
 
 Task/trial files are read as plain JSON in the Harbor-native layout (trial directories with `result.json`, task directories with `task.toml`), so results produced by standard Harbor jobs work out of the box.
 
-The judge never sees its own prior verdicts: the `triage-kit/` products directory is excluded from the check file tree and deny-listed in the `read_file`/`glob`/`grep` sandbox, so a `--force` rerun is always an independent re-judgment.
+The judge never sees its own prior verdicts: the `triage-kit/` products directory is excluded from the check file tree, and in the **general** backend the `read_file`/`glob`/`grep` sandbox deny-lists it — so a `--force` rerun is an independent re-judgment. (The **claude** backend delegates tool execution to the Claude Agent SDK, which has no such deny-list.)
 
 Judgment criteria live in data (TOML rubrics); output schemas are generated dynamically from them — extending evaluation dimensions requires zero code changes:
 
