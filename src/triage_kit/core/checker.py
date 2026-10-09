@@ -62,6 +62,7 @@ class Checker:
                 task_dir,
                 max_depth=_MAX_TREE_DEPTH,
                 max_entries=_MAX_TREE_ENTRIES,
+                exclude={_PRODUCTS_DIR},
             ),
             criteria_guidance=build_criteria_guidance(self.rubric),
         )

@@ -85,6 +85,28 @@ class TestCheckTask:
         assert "buried.txt" not in prompt         # depth-cut
         assert "deeper entries omitted" in prompt  # annotated truncation
 
+    def test_file_tree_excludes_products_dir_on_force_rerun(
+        self, task, rubric, good_response
+    ):
+        """D-audit: --force 重跑时，prompt 的文件树不得包含 triage-kit/
+        产物目录——judge 不能看到自己上一次的判定结果（自引用偏差）。"""
+        from triage_kit.core.checker import Checker
+
+        # 模拟上一轮产物存在
+        tk = task / TK
+        tk.mkdir()
+        (tk / RESULT).write_text("{}", encoding="utf-8")
+
+        backend = make_backend(good_response)
+        Checker(backend=backend, rubric=rubric, model="test-model",
+                force=True).check_task(task)
+
+        prompt = backend.agent_prompts[0]
+        assert "triage-kit" not in prompt
+        assert "check-result" not in prompt
+        # task 本体文件仍在树中
+        assert "instruction.md" in prompt
+
     def test_writes_check_result_json(self, task, rubric, good_response):
         from triage_kit.core.checker import Checker
 

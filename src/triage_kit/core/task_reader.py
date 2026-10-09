@@ -34,7 +34,8 @@ def detect_steps(path: Path) -> list[Path]:
 
 
 def render_file_tree(path: Path, *, max_depth: int | None = None,
-                     max_entries: int | None = None) -> str:
+                     max_entries: int | None = None,
+                     exclude: set[str] | None = None) -> str:
     """Render a directory tree as indented text (uses '/' separators).
 
     max_depth caps directory nesting (directories cut by it get a
@@ -43,10 +44,14 @@ def render_file_tree(path: Path, *, max_depth: int | None = None,
     final "... N more entries omitted" line). Truncation is always
     annotated, never silent — the model must know the tree was cut and
     explore with tools instead.
+
+    exclude hides top-level entries by name (e.g. the triage-kit
+    products directory, so a judge never sees its own prior verdict).
     """
     root = Path(path)
     if not root.exists():
         return ""
+    excluded = exclude or set()
 
     all_entries: list[tuple[Path, int]] = []
 
@@ -54,6 +59,8 @@ def render_file_tree(path: Path, *, max_depth: int | None = None,
         for entry in sorted(
             dir_path.iterdir(), key=lambda p: (p.is_file(), p.name.lower())
         ):
+            if depth == 1 and entry.name in excluded:
+                continue
             all_entries.append((entry, depth))
             if entry.is_dir():
                 collect(entry, depth + 1)

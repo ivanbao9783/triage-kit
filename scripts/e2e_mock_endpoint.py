@@ -132,11 +132,12 @@ def main() -> None:
 
     assert proc.returncode == 0, "CLI failed"
 
-    # product assertions
+    # product assertions (products live in the triage-kit/ subdirectory)
+    products = trial / "triage-kit"
     analysis = json.loads(
-        (trial / "analysis.json").read_text(encoding="utf-8")
+        (products / "analysis.json").read_text(encoding="utf-8")
     )
-    md = (trial / "analysis.md").read_text(encoding="utf-8")
+    md = (products / "analysis.md").read_text(encoding="utf-8")
     assert analysis["summary"] == SUBMIT["summary"]
     assert analysis["checks"]["reward_hacking"]["outcome"] == "pass"
     assert "demo__e2e" in md and "reward_hacking" in md
