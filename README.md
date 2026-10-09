@@ -2,12 +2,52 @@
 
 Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Harbor-ecosystem agent evaluation.
 
-triage-kit is extracted from pier-ecosystem evaluation tooling (datacurve-pier, a Harbor fork). Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored); the goal of this repo is to restore them to their Harbor-native form as an **independently runnable** toolkit:
+triage-kit is extracted from [pier](https://github.com/datacurve-ai/pier)-ecosystem evaluation tooling. Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored); the goal of this repo is to restore them to their Harbor-native form as an **independently runnable** toolkit:
 
 - **analyze** — post-evaluation triage of trial results (badcase filtering + reward-hacking / task-specification attribution)
 - **check** — pre-evaluation quality gate for tasks (11-criteria rubric, family-customizable)
 
-**Status: design phase.** The design document ([docs/DESIGN.md](docs/DESIGN.md)) is the source of truth; the implementation plan lives in its "实施步骤" section. This repository currently ships the extracted assets and design docs only.
+**Status: implemented (M1–M7).** Core chain is complete and E2E-verified (117 tests): contract → rubric-driven schema → general/claude harnesses → CLI. The trae SKILL.md asset pack (M8) is in progress. Design document: [docs/DESIGN.md](docs/DESIGN.md).
+
+## Installation
+
+```bash
+pip install -e ".[general]"   # OpenAI-compatible backends (GLM / DeepSeek / Qwen / ...)
+pip install -e ".[claude]"    # Claude Agent SDK backend
+pip install -e ".[dev]"       # run the test suite
+```
+
+## Usage
+
+### general backend (any OpenAI-compatible endpoint)
+
+```bash
+export OPENAI_API_KEY=...                       # or your provider's key
+export OPENAI_BASE_URL=https://api.deepseek.com/v1   # optional, non-default endpoint
+
+# badcase attribution over a trial (or a whole job dir)
+triage analyze outputs/job/details --failing \
+    --backend general --model glm-4.7
+
+# task quality gate (11-criteria default rubric)
+triage check deep-swe/tasks/ts-pattern-match-each \
+    --backend general --model glm-4.7
+```
+
+Notes: `-m/--model` is **required** for `--backend general` (no sane default across endpoints). `--base-url` overrides the endpoint; the target host is auto-exempted from system proxies.
+
+### claude backend (reference implementation, pier-compatible defaults)
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+
+triage analyze outputs/job/details      # defaults to -m haiku (pier parity)
+triage check path/to/task               # defaults to -m sonnet (pier parity)
+```
+
+### trae harness
+
+Not a CLI option: the hosting agent itself is the tool loop. A SKILL.md asset pack (M8) directs it to run the same workflows with the same assets and product formats.
 
 ## Why
 

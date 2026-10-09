@@ -154,7 +154,7 @@ triage analyze <trial> --task-dir /local/path/to/task
 
 ### TRAE skill 形态
 
-无命令、无运行时——`backends/trae/SKILL.md` 放入 TRAE skills 目录后，对话中说"帮我归因这个 trial 目录，重点看是否作弊"即触发。TRAE agent 天然具备 Read/Glob/Grep，按 SKILL.md 规程读取同一份 assets/ 资产执行，产出同格式文件。
+无命令、无运行时——`backends/trae/SKILL.md` 放入 TRAE skills 目录后，对话中说"帮我归因这个 trial 目录 `…/ts-pattern-match-each__9giF4pL`，重点看是否作弊"即触发。TRAE agent 天然具备 Read/Glob/Grep，按 SKILL.md 规程读取同一份 assets/ 资产执行，产出同格式文件。
 
 注：`--backend trae` 不作为 CLI 选项（trae harness 是 skill 形态，CLI 只有 `--backend general|claude`）。
 
@@ -165,10 +165,10 @@ triage analyze <trial> --task-dir /local/path/to/task
 对 job 目录跑完后（与 pier viewer 兼容）：
 
 ```
-<job_dir>/                                      ← job 目录
+<job_dir>/                                       ← job 目录
 ├── analysis.json                               【新增】job 级聚合
 ├── analysis.md                                 【新增】job_summary 文本版
-└── <trial_name>/
+└── ts-pattern-match-each__9giF4pL/
     ├── result.json                             （原有，只读）
     ├── agent/trajectory.json                  （原有，只读——judge 的证据源）
     ├── analysis.json                           【新增】单 trial 归因
@@ -180,7 +180,7 @@ triage analyze <trial> --task-dir /local/path/to/task
 ```json
 {
   "trial_name": "ts-pattern-match-each__9giF4pL",
-  "summary": "Agent 在 3 轮内定位到 matchEach 的类型收窄缺陷，通过了全部 91 个测试。",
+  "summary": "Agent 在 3 轮内定位到 matchEach 的类型收窄缺陷…通过了全部 91 个测试。",
   "checks": {
     "reward_hacking": {
       "outcome": "pass",
@@ -294,7 +294,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 6. **task_reader + Checker**：task 目录校验（is_valid 等价物）、file_tree 渲染、多步任务逐 step 展开、check-result.json 落盘
 7. **CLI 入口**：typer 命令（`triage analyze` + `triage check`，含 `-r` rubric 选择与家族自动探测）+ 后端选择装配
 8. **trae harness**：SKILL.md 包装同一套 assets（analyze 与 check 作为并列工作流）
-9. **端到端验证**：对真实 trial 实跑 analyze；对 DeepSWE 数据集任务实跑 check（default 与 deep-swe rubric 各跑一遍，结果差异本身即 KNOWN-ISSUES 的实证）；claude/general 双后端对照归因；产物回灌 pier viewer 验证兼容
+9. **端到端验证**：对真实 Harbor job 的 trial 实跑 analyze；对 DeepSWE 数据集任务实跑 check（default 与 deep-swe rubric 各跑一遍，结果差异本身即 KNOWN-ISSUES 的实证）；claude/general 双后端对照归因；产物回灌 pier viewer 验证兼容
 
 **第二批（全流程打通后）**：
 
