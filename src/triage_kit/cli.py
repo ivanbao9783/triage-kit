@@ -229,5 +229,47 @@ def check(
         _fail(str(e))
 
 
+@app.command()
+def clean(
+    path: Path = typer.Argument(
+        ..., help="Trial, job or task directory to restore (searched "
+                  "recursively for triage-kit/ product directories)."
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y",
+        help="Actually delete (default is a dry-run listing).",
+    ),
+) -> None:
+    """Restore evaluated directories: remove triage-kit/ product dirs."""
+    import shutil
+
+    if not path.exists():
+        _fail(f"path not found: {path}")
+    if not path.is_dir():
+        _fail(f"not a directory: {path}")
+
+    # Products only ever land in <dir>/triage-kit/, so removal is a
+    # directory-name search — the original evaluation data never
+    # matches and stays untouched.
+    targets = sorted(p for p in path.rglob("triage-kit") if p.is_dir())
+    if not targets:
+        typer.echo("No triage-kit product directories found.")
+        return
+
+    verb = "removed" if yes else "would remove"
+    for t in targets:
+        typer.echo(f"{verb} {t}")
+    if yes:
+        for t in targets:
+            if t.exists():
+                shutil.rmtree(t)
+        typer.echo(f"{len(targets)} product directory(ies) removed.")
+    else:
+        typer.echo(
+            f"{len(targets)} product directory(ies) found — dry run, "
+            f"pass --yes to delete."
+        )
+
+
 if __name__ == "__main__":
     app()

@@ -356,6 +356,69 @@ class TestCheckCommand:
         assert result.exit_code != 0
 
 
+class TestCleanCommand:
+    """triage clean: 复原原生输入——递归删除 triage-kit/ 产物目录。"""
+
+    @staticmethod
+    def _make_job_with_products(tmp_path):
+        """job 级 + trial 级产物俱全的 job 结构。"""
+        job = tmp_path / "job"
+        make_trial(job / "t1__aaa", reward=0.0)
+        for d in (job, job / "t1__aaa"):
+            tk = d / "triage-kit"
+            tk.mkdir(parents=True)
+            (tk / "analysis.json").write_text("{}", encoding="utf-8")
+        return job
+
+    def test_dry_run_lists_but_keeps_everything(self, tmp_path):
+        """默认 dry-run：列出待删清单但不删。"""
+        from triage_kit.cli import app
+
+        job = self._make_job_with_products(tmp_path)
+        result = runner.invoke(app, ["clean", str(job)])
+
+        assert result.exit_code == 0, result.output
+        assert "would remove" in result.output
+        assert str(job / "triage-kit") in result.output
+        assert str(job / "t1__aaa" / "triage-kit") in result.output
+        # nothing deleted
+        assert (job / "triage-kit" / "analysis.json").is_file()
+        assert (job / "t1__aaa" / "triage-kit" / "analysis.json").is_file()
+
+    def test_yes_removes_products_preserves_originals(self, tmp_path):
+        """--yes 真删：两个位置的产物目录都消失，原生数据零损伤。"""
+        from triage_kit.cli import app
+
+        job = self._make_job_with_products(tmp_path)
+        result = runner.invoke(app, ["clean", str(job), "--yes"])
+
+        assert result.exit_code == 0, result.output
+        assert not (job / "triage-kit").exists()
+        assert not (job / "t1__aaa" / "triage-kit").exists()
+        # 原生评测数据原封不动
+        assert (job / "t1__aaa" / "result.json").is_file()
+        assert (job / "t1__aaa" / "trial.log").is_file()
+        assert "removed" in result.output
+
+    def test_no_products_reports_and_exits_cleanly(self, tmp_path):
+        from triage_kit.cli import app
+
+        plain = tmp_path / "plain"
+        make_trial(plain / "t1__aaa", reward=0.0)
+        result = runner.invoke(app, ["clean", str(plain)])
+
+        assert result.exit_code == 0, result.output
+        assert "No triage-kit" in result.output
+
+    def test_missing_path_errors(self, tmp_path):
+        from triage_kit.cli import app
+
+        result = runner.invoke(
+            app, ["clean", str(tmp_path / "no-such-dir")]
+        )
+        assert result.exit_code != 0
+
+
 class TestBackendSelection:
     def test_invalid_backend_name_errors(self, monkeypatch, trial):
         import triage_kit.cli as cli

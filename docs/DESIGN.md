@@ -146,6 +146,10 @@ triage check <multi_step_task_dir>
 
 # 跨机器拷贝场景：手动覆盖 task 目录位置
 triage analyze <trial> --task-dir /local/path/to/task
+
+# 复原：递归删除 triage-kit/ 产物目录，还原原生输入（默认 dry-run，--yes 才真删）
+triage clean <job_dir>          # 预览将删除的产物目录
+triage clean <job_dir> --yes    # 实际删除，原生评测数据零损伤
 ```
 
 环境变量：
@@ -180,7 +184,7 @@ triage analyze <trial> --task-dir /local/path/to/task
         └── analysis.zh.md                      【可选】--lang zh 时的中文翻译版
 ```
 
-产物全部收进 `triage-kit/` 子目录：被评测目录保持零污染，重置产物只需删一个目录，且不会误伤 trial 的原始评测数据。
+产物全部收进 `triage-kit/` 子目录：被评测目录保持零污染，`triage clean` 一条命令即可复原原生输入（默认 dry-run 预览 + `--yes` 门控），且不会误伤 trial 的原始评测数据。
 
 `analysis.json` 内容示例：
 

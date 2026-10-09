@@ -59,7 +59,7 @@ Requires Python 3.11+. The editable install keeps the `assets/` tree next to the
 | `--lang en\|zh` | Product language (default: `en`); `zh` adds a translated `analysis.zh.md` |
 | `-v, --verbose` | Debug logging |
 
-All products are written in place, into a `triage-kit/` subdirectory next to the analyzed data — the evaluated directories stay clean, and one `rm -rf triage-kit` resets all products:
+All products are written in place, into a `triage-kit/` subdirectory next to the analyzed data — the evaluated directories stay clean, and `triage clean` restores them:
 
 ```
 <trial_dir>/triage-kit/          (also written at <job_dir>/ level)
@@ -81,6 +81,14 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 | `-v, --verbose` | Debug logging |
 
 Product: `triage-kit/check-result.json` (+ `check-result.meta.json` sidecar) in the task directory.
+
+### `triage clean <path>`
+
+| Option | Description |
+|---|---|
+| `-y, --yes` | Actually delete (default is a dry-run listing) |
+
+Restores evaluated directories to their pre-triage state: recursively finds and removes every `triage-kit/` product directory under the given trial/job/task path. Dry-run by default — pass `--yes` to delete. Original evaluation data (`result.json`, `trajectory.json`, `task.toml`, ...) is never touched.
 
 ### Backends
 
