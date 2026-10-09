@@ -16,5 +16,6 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P003 | Parallel trial analysis (`-j/--jobs`) | optimization | high | proposed | [P003-parallel-analysis.md](docs/proposals/P003-parallel-analysis.md) |
 | P004 | Multi-step per-step check expansion | feature | low | proposed | [P004-multi-step-check.md](docs/proposals/P004-multi-step-check.md) |
 | P005 | Deterministic contract pre-check layer | feature | medium | proposed | [P005-contract-precheck.md](docs/proposals/P005-contract-precheck.md) |
+| P006 | Diagnosis results viewer | feature | medium | proposed | [P006-diagnosis-viewer.md](docs/proposals/P006-diagnosis-viewer.md) |
 
 The README carries only a short summary of this table.
