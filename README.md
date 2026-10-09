@@ -141,9 +141,16 @@ The five prompt/rubric files are frozen byte-for-byte against their pier origina
 
 ## Roadmap
 
-- trae harness SKILL.md asset pack (M8)
-- family rubrics (e.g. `deep-swe`) shipped under `assets/check/rubrics/`
-- parallel trial analysis (`-j/--jobs`, default 1) — trials are analyzed strictly sequentially today (~1 min/trial with a fast model); the loop body is already dependency-free, so a thread pool would cut a 113-trial job from ~2h to ~15min at `-j 8`
+Planned work is tracked in [ROADMAP.md](ROADMAP.md) — the single
+source of truth. Each entry has a one-page design doc under
+`docs/proposals/`; code starts only after the doc passes its
+pre-development gate.
+
+Current entries:
+
+- **P001** — trae harness SKILL.md asset pack
+- **P002** — deep-swe family rubric (`-r deep-swe`)
+- **P003** — parallel trial analysis (`-j/--jobs`; ~2h → ~15min for a 113-trial job at `-j 8`)
 
 ## Development
 
