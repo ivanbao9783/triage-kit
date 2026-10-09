@@ -4,7 +4,13 @@ import json
 
 import pytest
 
-from tests.conftest import ANALYZE_RUBRIC, make_trial, write_sidecar
+from tests.conftest import (
+    ANALYZE_RUBRIC,
+    make_backend_keyed,
+    make_barrier_backend,
+    make_trial,
+    write_sidecar,
+)
 
 
 def make_backend(response: dict):
@@ -491,3 +497,118 @@ class TestAnalyzeJob:
         assert len(backend.plain_prompts) == 1
         assert result["failed_trials"] == ["t1__aaa"]
         assert result["trials"][0]["trial_name"] == "t2__bbb"
+
+
+class TestParallelAnalysis:
+    """P003: `-j/--jobs` — 有界线程池包裹 analyze_trial，join 后聚合。
+    产物顺序钉在目录序上（对 j 不变），单 trial 失败不毒化兄弟。"""
+
+    def test_jobs_below_one_rejected(self, rubric):
+        from triage_kit.core.analyzer import Analyzer
+
+        with pytest.raises(ValueError, match="jobs"):
+            Analyzer(backend=make_backend(GOOD_RESPONSE), rubric=rubric,
+                     model="m", jobs=0)
+
+    def test_barrier_proves_real_overlap(self, tmp_path, rubric):
+        """重叠证明：2 trial / jobs=2，barrier 只在真并发时放行。
+        串行（或 max_workers<2）实现会 break barrier，
+        两个 trial 全部落入 failed_trials，本测试失败。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        make_trial(tmp_path / "t2__bbb", reward=0.0)
+        backend = make_barrier_backend(2, GOOD_RESPONSE)
+
+        result = Analyzer(backend=backend, rubric=rubric, model="m",
+                          jobs=2).analyze_job(tmp_path)
+
+        assert result["failed_trials"] == []
+        assert [t["trial_name"] for t in result["trials"]] == [
+            "t1__aaa", "t2__bbb",
+        ]
+
+    def test_single_failure_under_concurrency_does_not_poison_siblings(
+        self, tmp_path, rubric, caplog
+    ):
+        """失败隔离：坏 trial 落 failed_trials 并有 ERROR 行点名，
+        兄弟照常分析，聚合照跑。"""
+        import logging as logging_mod
+
+        from triage_kit.core.analyzer import Analyzer
+
+        make_trial(tmp_path / "t1__bad", reward=0.0)
+        make_trial(tmp_path / "t2__good", reward=0.0)
+        bad = {"trial_name": "t1__bad", "summary": "s",
+               "checks": {"reward_hacking":
+                          {"outcome": "bogus", "explanation": "x"}}}
+        good = dict(GOOD_RESPONSE, trial_name="t2__good")
+        backend = make_backend_keyed({"t1__bad": bad, "t2__good": good})
+
+        with caplog.at_level(logging_mod.ERROR):
+            result = Analyzer(backend=backend, rubric=rubric, model="m",
+                              jobs=2).analyze_job(tmp_path)
+
+        assert result["failed_trials"] == ["t1__bad"]
+        assert [t["trial_name"] for t in result["trials"]] == ["t2__good"]
+        assert len(backend.plain_prompts) == 1  # aggregation still ran
+        assert any(
+            r.levelname == "ERROR" and "t1__bad" in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_job_product_order_follows_listing_not_completion(
+        self, tmp_path, rubric
+    ):
+        """顺序钉定：完成顺序与目录序相反时，产物 trials 仍按目录序
+        ——产物对 j 不变（同 trial 集合逐字节等价的前提）。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        for name in ("t1__aaa", "t2__bbb", "t3__ccc"):
+            make_trial(tmp_path / name, reward=0.0)
+        responses = {
+            name: dict(GOOD_RESPONSE, trial_name=name)
+            for name in ("t1__aaa", "t2__bbb", "t3__ccc")
+        }
+        # 完成顺序倒置：排最前的最慢，排最后的零延迟
+        delays = {"t1__aaa": 0.3, "t2__bbb": 0.15, "t3__ccc": 0.0}
+        backend = make_backend_keyed(responses, delays=delays)
+
+        result = Analyzer(backend=backend, rubric=rubric, model="m",
+                          jobs=4).analyze_job(tmp_path)
+
+        assert result["failed_trials"] == []
+        assert [t["trial_name"] for t in result["trials"]] == [
+            "t1__aaa", "t2__bbb", "t3__ccc",
+        ]
+
+    def test_worker_logs_carry_trial_prefix(self, tmp_path, rubric, caplog):
+        """归因前缀：并发下 triage_kit 日志带 [trial_name] 前缀。"""
+        import logging as logging_mod
+
+        from triage_kit.core.analyzer import (
+            Analyzer,
+            install_trial_log_prefix,
+        )
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        make_trial(tmp_path / "t2__bbb", reward=0.0)
+        responses = {
+            name: dict(GOOD_RESPONSE, trial_name=name)
+            for name in ("t1__aaa", "t2__bbb")
+        }
+        backend = make_backend_keyed(responses)
+
+        install_trial_log_prefix()
+        with caplog.at_level(logging_mod.INFO):
+            Analyzer(backend=backend, rubric=rubric, model="m",
+                     jobs=2).analyze_job(tmp_path)
+
+        finished = [
+            r.getMessage() for r in caplog.records
+            if "analysis finished" in r.getMessage()
+        ]
+        assert len(finished) == 2
+        assert {m.split("]")[0] + "]" for m in finished} == {
+            "[t1__aaa]", "[t2__bbb]",
+        }

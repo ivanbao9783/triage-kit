@@ -3,10 +3,17 @@
 The Analyzer owns the analyze (badcase attribution) workflow. All LLM access
 goes through the AgentBackend contract, so the orchestration is fully
 testable with a fake backend and works with any real harness.
+
+Job mode runs trials through a bounded thread pool (P003: `-j/--jobs`,
+default 1). Results fold in directory order after the join, so products
+are identical for any j over the same trial set; per-trial failures are
+collected (never raised out of a worker) and reported via failed_trials.
 """
 
+import contextvars
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from triage_kit.core import cache, trial_reader
@@ -15,6 +22,38 @@ from triage_kit.core.rubric import Rubric, build_criteria_guidance
 from triage_kit.core.schema import build_analyze_response_schema
 
 logger = logging.getLogger(__name__)
+
+# Current trial for log attribution in job mode (P003). ContextVars are
+# per-thread: each pool worker sees only its own value, so concurrent
+# trials cannot leak into each other's log context.
+_current_trial: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "triage_current_trial", default=None
+)
+_prefix_installed = False
+
+
+def install_trial_log_prefix() -> None:
+    """Prefix triage_kit log records with the current trial name.
+
+    Concurrent workers interleave their log output; a per-trial prefix
+    keeps every line attributable. Implemented as a LogRecord factory
+    (runs at record creation) so records emitted by ANY triage_kit
+    logger get prefixed, no matter which handler ships them. Idempotent.
+    """
+    global _prefix_installed
+    if _prefix_installed:
+        return
+    base = logging.getLogRecordFactory()
+
+    def prefixed_factory(*args, **kwargs):
+        record = base(*args, **kwargs)
+        trial = _current_trial.get()
+        if trial is not None and record.name.startswith("triage_kit"):
+            record.msg = f"[{trial}] {record.msg}"
+        return record
+
+    logging.setLogRecordFactory(prefixed_factory)
+    _prefix_installed = True
 
 # All products live in this subdirectory next to the trial/job data,
 # so triage output never scatters into the evaluated directories.
@@ -68,12 +107,15 @@ class Analyzer:
     """Attribution analysis over trials (single) and jobs (aggregate)."""
 
     def __init__(self, *, backend, rubric: Rubric, model: str,
-                 force: bool = False, lang: str = "en"):
+                 force: bool = False, lang: str = "en", jobs: int = 1):
+        if jobs < 1:
+            raise ValueError(f"jobs must be an integer >= 1, got {jobs}")
         self.backend = backend
         self.rubric = rubric
         self.model = model
         self.force = force
         self.lang = lang
+        self.jobs = jobs
         self._template = get_asset("analyze/analyze.txt").read_text(encoding="utf-8")
         self._job_template = get_asset("analyze/analyze-job.txt").read_text(
             encoding="utf-8"
@@ -141,16 +183,55 @@ class Analyzer:
         cache.write_json(products_dir / "analysis.meta.json", self._identity())
         return analysis
 
+    def _analyze_one(
+        self, trial_dir: Path
+    ) -> tuple[str, dict | None, Exception | None]:
+        """Pool worker: analyze one trial under the log-prefix contextvar.
+
+        Never raises — failures travel back as the third tuple element
+        and are reported (and folded into failed_trials) after the join.
+        """
+        token = _current_trial.set(trial_dir.name)
+        try:
+            logger.info("analysis start")
+            analysis = self.analyze_trial(trial_dir)
+            logger.info("analysis finished")
+            return trial_dir.name, analysis, None
+        except Exception as exc:
+            return trial_dir.name, None, exc
+        finally:
+            _current_trial.reset(token)
+
     def analyze_job(self, job_dir: Path, *, failing_only: bool = False) -> dict:
         job_dir = Path(job_dir)
+        trial_dirs = list(
+            trial_reader.list_trials(job_dir, failing_only=failing_only)
+        )
 
-        trial_results: list[dict] = []
-        failed_trials: list[str] = []
-        for trial_dir in trial_reader.list_trials(job_dir, failing_only=failing_only):
-            try:
-                trial_results.append(self.analyze_trial(trial_dir))
-            except Exception:
-                failed_trials.append(trial_dir.name)
+        # Bounded pool for every j (P003). At j=1 the single FIFO worker
+        # preserves submission order, so call order equals listing order
+        # — one code path for both modes, no sequential special case.
+        with ThreadPoolExecutor(max_workers=self.jobs) as pool:
+            futures = [pool.submit(self._analyze_one, d) for d in trial_dirs]
+            trial_results: list[dict] = []
+            failed_trials: list[str] = []
+            # Consume in submission (listing) order — result() blocks on
+            # that specific trial — so products are j-invariant: the
+            # aggregation prompt and job products are byte-identical for
+            # any j over the same trial set.
+            for trial_dir, future in zip(trial_dirs, futures):
+                _name, analysis, exc = future.result()
+                if exc is not None:
+                    failed_trials.append(trial_dir.name)
+                    logger.error(
+                        "[%s] analysis failed: %s: %s",
+                        trial_dir.name, type(exc).__name__, exc,
+                    )
+                    logger.debug(
+                        "[%s] failure traceback", trial_dir.name, exc_info=exc
+                    )
+                else:
+                    trial_results.append(analysis)
 
         if not trial_results and not failed_trials:
             # Empty selection (e.g. --failing with zero badcases): an

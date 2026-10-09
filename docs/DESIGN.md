@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：MVP（M1–M7b）已全部落地——CLI 三命令（analyze / check / clean）可用，161 项测试全绿，真实 LLM 端点（DeepSeek）E2E 验证通过，产物布局经真实样本实测。
+**项目现状**：MVP（M1–M7b）已全部落地——CLI 三命令（analyze / check / clean）可用，170 项测试全绿，真实 LLM 端点（DeepSeek）E2E 验证通过，产物布局经真实样本实测。
 
 ---
 
@@ -120,7 +120,7 @@ triage-kit/
 │   │
 │   └── cli.py                       入口：triage analyze / check / clean
 │
-├── tests/                           ← pytest，161 项；conftest.py 集中共享工厂/常量/FakeBackend
+├── tests/                           ← pytest，170 项；conftest.py 集中共享工厂/常量/FakeBackend
 ├── docs/
 │   ├── DESIGN.md                    本文档
 │   └── proposals/                   特性设计文档（P000 流程）
@@ -169,7 +169,7 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
 
 各命令通用：`--force/-f` 绕过缓存重跑；`--verbose/-v` 开 DEBUG 日志（general harness 记录完整工具调用序列，可审计"judge 看了什么证据"）。
 
-**并发说明**：job 级分析当前为**严格串行**（同步 for 循环，~1 min/trial）；`-j/--jobs` 并发选项为 P003，未实现。
+**并发说明**（P003）：`triage analyze` 的 job 模式支持 `-j/--jobs <n>` 有界并发（`ThreadPoolExecutor(max_workers=n)` 包裹逐 trial 分析，默认 `-j 1` 保持串行行为）。产物顺序钉在目录序上，对 `j` 不变；并发下日志带 `[trial_name]` 前缀可归因；单 trial 失败不毒化兄弟（计入 `failed_trials` 并打 ERROR 行）。429 限流由用户自行调低 `-j` 应对（无自动限流调度）。
 
 **环境变量**：
 - `OPENAI_API_KEY`（general harness 凭证；端点也可用 `OPENAI_BASE_URL` 环境变量替代 `--base-url`）
@@ -252,7 +252,8 @@ judge 的响应 trial_name 必须与 trial 目录名一致，不一致按失败�
         → backend（general/claude）执行 agent 循环，返回 (result, meta)
         → schema 校验（trial_name 一致性 + 空值拒绝）→ analysis.json/md/meta 落盘 triage-kit/ 子目录
           （--lang zh 时追加翻译二跳：一次纯 LLM query 调用，写 analysis.zh.md）
-        → job 模式：循环所有 trial（串行）→ 二级聚合（各 trial summary + checks 拼接，无工具纯 LLM 调用）
+        → job 模式：所有 trial 经有界线程池（-j/--jobs，默认 1=串行 FIFO）→ join 后按目录序折叠
+          → 二级聚合（各 trial summary + checks 拼接，无工具纯 LLM 调用）
 ```
 
 **check（task 侧质检）**：
@@ -298,7 +299,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十、工程质量机制
 
-- **TDD**：全项目红-绿流程，测试先行（161 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
+- **TDD**：全项目红-绿流程，测试先行（170 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
 - **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走独立 E2E 脚本（`scripts/e2e_mock_endpoint.py`，mock 端点全流程断言）
 - **工具预算与截断**（general harness）：read_file 单文件 10MB / 2000 行 / 每行 2000 字符三重上限（附截断标记），glob 200 条上限，grep 200 匹配上限，max_turns 默认 15
@@ -311,7 +312,8 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **失去 SDK 级 structured output 强约束**（general harness）：靠 final-tool 的 tool calling 参数校验兜底，格式漂移风险可控但非零
 - **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与 Harbor/pier 原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项
 - **claude 后端禁读缺口**：judge 禁读机制（第七节）仅覆盖 general 后端；claude 委托 Agent SDK 执行工具（`bypassPermissions`），不经过本地沙箱。待立项
-- **job 级分析串行**：~1 min/trial，113-trial job 约 2 小时；`-j/--jobs` 并发为 P003
+- **并发无限流调度**：`-j/--jobs` 为固定线程数，无 429 自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）
+- **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐
 - **task 目录跨机失效是主路径**：Linux 产出的 result.json 拷贝到 Windows 后 task path 必然不可解析，task_section 的降级话术（"infer from trajectory"）在跨机场景是常态而非边缘；DeepSWE 样本中 mini-swe-agent 轨迹内嵌完整任务 prompt，降级路径实测可用，但不具普遍性
 - **job 模式不透传 --task-dir**：一个 job 的多个 trial 可能来自不同任务，单一路径无法覆盖

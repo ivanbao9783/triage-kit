@@ -243,6 +243,53 @@ class TestAnalyzeCommand:
         assert result.exit_code != 0
 
 
+class TestJobsOption:
+    """P003: `-j/--jobs` — analyze 并发度（job 模式）。"""
+
+    def test_jobs_zero_rejected(self, fake_backend, trial):
+        from triage_kit.cli import app
+
+        result = runner.invoke(
+            app, ["analyze", str(trial), "--model", "m1", "--jobs", "0"]
+        )
+        assert result.exit_code != 0
+        assert "--jobs" in result.output
+
+    def test_negative_jobs_rejected(self, fake_backend, trial):
+        from triage_kit.cli import app
+
+        result = runner.invoke(
+            app, ["analyze", str(trial), "--model", "m1", "-j", "-1"]
+        )
+        assert result.exit_code != 0
+        assert "--jobs" in result.output
+
+    def test_jobs_two_on_job_dir(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        make_trial(tmp_path / "t2__bbb", reward=0.0)
+
+        result = runner.invoke(
+            app, ["analyze", str(tmp_path), "--model", "m1", "-j", "2"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert len(fake_backend.agent_prompts) == 2
+        assert (tmp_path / "triage-kit" / "analysis.json").is_file()
+
+    def test_jobs_ignored_for_single_trial_dir(self, fake_backend, trial):
+        """单 trial 直调不进池：-j 只影响 job 模式。"""
+        from triage_kit.cli import app
+
+        result = runner.invoke(
+            app, ["analyze", str(trial), "--model", "m1", "-j", "4"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert len(fake_backend.agent_prompts) == 1
+
+
 class TestModelValidation:
     """Model authority lives at the CLI layer:
     - general: -m is mandatory (no sane default across OpenAI-compatible

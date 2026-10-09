@@ -12,7 +12,7 @@ from pathlib import Path
 import typer
 
 from triage_kit.core import trial_reader
-from triage_kit.core.analyzer import Analyzer
+from triage_kit.core.analyzer import Analyzer, install_trial_log_prefix
 from triage_kit.core.assets import get_asset
 from triage_kit.core.checker import Checker
 from triage_kit.core.rubric import load_rubric
@@ -140,6 +140,11 @@ def analyze(
         help="Product language: en (default) or zh — adds a translated "
              "analysis.zh.md next to the English products.",
     ),
+    jobs: int = typer.Option(
+        1, "--jobs", "-j",
+        help="Concurrent trial analyses in job mode (default 1 = "
+             "sequential; single-trial analysis is never pooled).",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Attribute badcases: judge trials against a rubric."""
@@ -147,6 +152,9 @@ def analyze(
         logging.basicConfig(level=logging.DEBUG)
     if lang not in ("en", "zh"):
         _fail(f"--lang must be 'en' or 'zh', got {lang!r}")
+    if jobs < 1:
+        _fail(f"--jobs must be an integer >= 1, got {jobs}")
+    install_trial_log_prefix()
 
     path = Path(path)
     if not path.exists():
@@ -169,6 +177,7 @@ def analyze(
             model=effective_model,
             force=force,
             lang=lang,
+            jobs=jobs,
         )
 
         if trial_reader.is_trial_dir(path):

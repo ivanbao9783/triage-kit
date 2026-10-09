@@ -63,6 +63,7 @@ Requires Python 3.11+. The editable install keeps the `assets/` tree next to the
 | `--base-url <url>` | OpenAI-compatible endpoint override — `general` only |
 | `-f, --force` | Re-analyze even if cached `triage-kit/analysis.json` exists (overwrites) |
 | `--lang en\|zh` | Product language (default: `en`); `zh` adds a translated `analysis.zh.md` |
+| `-j, --jobs <n>` | Concurrent trial analyses in job mode (default: `1` = sequential; single-trial analysis is never pooled) |
 | `-v, --verbose` | Debug logging |
 
 All products are written in place, into a `triage-kit/` subdirectory next to the analyzed data — the evaluated directories stay clean, and `triage clean` restores them:
@@ -150,13 +151,12 @@ Current entries:
 
 - **P001** — trae harness SKILL.md asset pack
 - **P002** — deep-swe family rubric (`-r deep-swe`)
-- **P003** — parallel trial analysis (`-j/--jobs`; ~2h → ~15min for a 113-trial job at `-j 8`)
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest                    # 161 tests, no network access needed
+pytest                    # 170 tests, no network access needed
 ```
 
 ## License
