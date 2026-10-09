@@ -294,7 +294,7 @@ class TestModelValidation:
     """Model authority lives at the CLI layer:
     - general: -m is mandatory (no sane default across OpenAI-compatible
       endpoints, and a literal 'default' in AgentMeta would be a lie);
-    - claude: pier-compatible defaults (analyze: haiku, check: sonnet)."""
+    - claude: upstream-compatible defaults (analyze: haiku, check: sonnet)."""
 
     def test_general_without_model_errors(self, monkeypatch, trial):
         import triage_kit.cli as cli

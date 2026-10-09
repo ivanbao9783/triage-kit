@@ -1,9 +1,9 @@
 """Tests for core/assets.py — asset resolution + byte-frozen heritage.
 
 The five vendored files below must stay byte-for-byte identical to their
-pier originals (pier viewer compatibility contract). The sha256 snapshot
+upstream originals (asset provenance contract). The sha256 snapshot
 turns an accidental edit into an explicit test failure instead of a
-silent viewer breakage downstream.
+silent drift from upstream.
 """
 
 import hashlib
@@ -50,8 +50,8 @@ class TestByteFrozenAssets:
         data = (REPO_ROOT / rel_path).read_bytes()
         actual = hashlib.sha256(data).hexdigest()
         assert actual == expected_sha, (
-            f"{rel_path} differs from the pier original "
+            f"{rel_path} differs from the upstream original "
             f"(expected {expected_sha}, got {actual}); vendored assets "
-            f"must stay byte-for-byte identical for pier viewer "
-            f"compatibility"
+            f"must stay byte-for-byte identical for provenance "
+            f"and upstream diff-ability"
         )

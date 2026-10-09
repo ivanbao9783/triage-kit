@@ -91,7 +91,7 @@ def _resolve_check_rubric(value: str | None) -> Path:
     )
 
 
-# pier-compatible claude defaults; general has no sane cross-endpoint default
+# Upstream-compatible claude defaults; general has no sane cross-endpoint default
 # so -m is mandatory there (a literal "default" in AgentMeta would be a lie).
 _DEFAULT_MODEL = {"claude": {"analyze": "haiku", "check": "sonnet"}}
 

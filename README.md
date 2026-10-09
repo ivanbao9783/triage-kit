@@ -6,7 +6,7 @@ Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Ha
 - **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric)
 - **`triage clean`** — restore evaluated directories by removing all `triage-kit/` product directories (dry-run by default)
 
-triage-kit is extracted from the [pier](https://github.com/datacurve-ai/pier)-ecosystem evaluation tooling. Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte); this repo restores them as an **independently runnable** toolkit that works with any OpenAI-compatible endpoint or the Claude Agent SDK. Design document: [docs/DESIGN.md](docs/DESIGN.md).
+triage-kit is an **independently runnable** toolkit that works with any OpenAI-compatible endpoint or the Claude Agent SDK. Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte). Design document: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quick start
 
@@ -101,12 +101,12 @@ Restores evaluated directories to their pre-triage state: recursively finds and 
 
 **general** — self-built read-only tool loop (`read_file` / `glob` / `grep` + final-tool submission) over any OpenAI-compatible endpoint. `-m/--model` is required (no sane default across endpoints). `--base-url` overrides the endpoint; the target host is auto-exempted from system proxies.
 
-**claude** — Claude Agent SDK, retained as the pier-compatible reference implementation:
+**claude** — Claude Agent SDK, retained as the reference implementation:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-triage analyze path/to/trial     # defaults to -m haiku (pier parity)
-triage check path/to/task        # defaults to -m sonnet (pier parity)
+triage analyze path/to/trial     # defaults to -m haiku
+triage check path/to/task        # defaults to -m sonnet
 ```
 
 `--base-url` is rejected for this backend (set `ANTHROPIC_BASE_URL` instead).
@@ -138,7 +138,7 @@ assets/                  pure-text assets, decoupled from code
         └── KNOWN-ISSUES.md      documented rubric defects backlog
 ```
 
-The five prompt/rubric files are frozen byte-for-byte against their pier originals (guarded by sha256 snapshot tests) for asset provenance and diff-ability against upstream.
+The five prompt/rubric files are frozen byte-for-byte against their upstream originals (guarded by sha256 snapshot tests) for asset provenance and diff-ability.
 
 ## Roadmap
 
@@ -146,11 +146,6 @@ Planned work is tracked in [ROADMAP.md](ROADMAP.md) — the single
 source of truth. Each entry has a one-page design doc under
 `docs/proposals/`; code starts only after the doc passes its
 pre-development gate.
-
-Current entries:
-
-- **P001** — trae harness SKILL.md asset pack
-- **P002** — deep-swe family rubric (`-r deep-swe`)
 
 ## Development
 
@@ -161,4 +156,4 @@ pytest                    # 170 tests, no network access needed
 
 ## License
 
-Apache-2.0. Prompt/rubric assets are derived from the [Harbor framework](https://github.com/harbor-framework/harbor) (vendored via pier); see [NOTICE](NOTICE).
+Apache-2.0. Prompt/rubric assets are derived from the [Harbor framework](https://github.com/harbor-framework/harbor); see [NOTICE](NOTICE).

@@ -1,6 +1,6 @@
 # triage-kit 设计文档
 
-> 从 pier 评测框架解耦的独立评测结果归因 + 任务质检工具包（资产源自 Harbor 生态）
+> 从 Harbor 生态评测工具链解耦的独立评测结果归因 + 任务质检工具包（资产源自 Harbor 生态）
 > 状态：**as-built 架构快照（已实现）** | v3：2026-10-09（对照代码全量核验后重构；v2 为实现前方案稿，已废止）
 
 ---
@@ -15,16 +15,16 @@
 
 ## 二、背景与目标
 
-pier（Harbor fork）提供了一套 LLM 驱动的评测后处理能力（badcase 筛选 + 归因分析 + 任务质检），但存在两个束缚：
+上游评测框架（Harbor fork）提供了一套 LLM 驱动的评测后处理能力（badcase 筛选 + 归因分析 + 任务质检），但存在两个束缚：
 
 1. **LLM 后端硬绑定**：唯一 `claude_agent_sdk` import 点，`-m` 只接受 Claude 模型；
-2. **与 pier 主框架耦合**：依赖 `TrialResult`（pydantic 校验）等 pier 模型类。
+2. **与上游主框架耦合**：依赖 `TrialResult`（pydantic 校验）等上游模型类。
 
 **血缘查证结论（2026-10-08，经 Harbor 上游核实）**：`analyze` 与 `check` 均为从 Harbor **vendored**（原样搬运）的能力（对应 Harbor 原生 `harbor task debug` 与 `harbor task check`），prompt/rubric 资产是 Harbor 生态的公共资产。因此 triage-kit 的解耦本质是**恢复这些资产的 Harbor-native 本来形态**（回归上游原始定位），而非移植改造。
 
 **目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（general harness 挂任意 OpenAI-compatible LLM），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（未来 triage-kit 自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 复原"完整链条。
 
-**核心设计哲学继承自 pier 原版**：把"判定标准"从 prompt 里抽出来变成数据（rubric），让输出 schema 随 rubric 动态生成，实现无改码的评测维度扩展。
+**核心设计哲学继承自上游原版**：把"判定标准"从 prompt 里抽出来变成数据（rubric），让输出 schema 随 rubric 动态生成，实现无改码的评测维度扩展。
 
 ---
 
@@ -36,8 +36,8 @@ pier（Harbor fork）提供了一套 LLM 驱动的评测后处理能力（badcas
 | 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；general harness（自研循环挂任意 OpenAI-compatible）+ claude harness（参照实现）；trae harness 规划为 skill 形态，**不作为 CLI 选项** | 已落地 |
 | Harbor 兼容 | 朴素 JSON 读取替代 TrialResult，原生支持（真实样本验证过字段布局，含 f2p/p2p/partial 细分透传） | 已落地 |
 | check 融合 | check 与 analyze 共享契约/schema 管线/两个 harness，引擎零新增——仅 `task_reader` + `checker` 编排 + `triage check` 子命令 | 已落地 |
-| check 文案 | check.txt 首句 "Pier task" 改回 "**a Harbor task**"——恢复上游原貌，保持与 Harbor 资产可 diff 同步 | 已落地 |
-| 产物布局 | 全部落 `<dir>/triage-kit/` 子目录（analyze 与 check 同规则）：被评测目录零污染，`triage clean` 一条命令复原；不再绑定 pier viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来自建，可自由采用新布局） | 已落地 |
+| check 文案 | check.txt 仅改首句的项目名（改为 "**a Harbor task**"）——恢复上游原貌，保持与 Harbor 资产可 diff 同步 | 已落地 |
+| 产物布局 | 全部落 `<dir>/triage-kit/` 子目录（analyze 与 check 同规则）：被评测目录零污染，`triage clean` 一条命令复原；不绑定任何上游 viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来自建，可自由采用新布局） | 已落地 |
 | 结构化输出 | general harness 用 final-tool 技巧（`submit_analysis` 强制调用，tool calling 参数校验兜底），实现在 `harness.py` 内部，无独立模块 | 已落地 |
 | 安全与预算 | `tools.py` 路径沙箱（cwd∪add_dirs 白名单 + `triage-kit/` 禁读）+ max_turns + 工具输出截断 | 已落地 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
@@ -45,7 +45,7 @@ pier（Harbor fork）提供了一套 LLM 驱动的评测后处理能力（badcas
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
 | 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——待立项 | 部分实现 |
 | task 目录 | analyze 的降级路径按主路径设计（跨机器拷贝场景 task path 必然失效），支持 `--task-dir` 覆盖 | 已落地 |
-| 项目名 | `triage-kit`（去 pier 化命名；NOTICE 保留 Harbor Apache 2.0 血缘致谢） | 已落地 |
+| 项目名 | `triage-kit`（独立命名；NOTICE 保留 Harbor Apache 2.0 血缘致谢） | 已落地 |
 
 ---
 
@@ -60,7 +60,7 @@ Agent 契约（唯一的接口层）
         │
         ├── trae harness ──── 规划形态：循环由 TRAE 宿主提供，SKILL.md 是资产包（P001）
         │
-        └── claude harness ── 参照实现：原 pier backend.py 移植，几乎原样
+        └── claude harness ── 参照实现：原上游 backend.py 移植，几乎原样
 ```
 
 **关键分界线**：
@@ -99,12 +99,12 @@ triage-kit/
 │           └── KNOWN-ISSUES.md      rubric 已知缺陷 backlog（见第八节）
 │
 ├── src/triage_kit/
-│   ├── core/                        ← 【契约+编排层】零 LLM 依赖、零 pier 依赖
+│   ├── core/                        ← 【契约+编排层】零 LLM 依赖、零上游框架依赖
 │   │   ├── contract.py              AgentBackend Protocol + AgentMeta（契约唯一定义处）
 │   │   ├── rubric.py                rubric pydantic 类 + load_rubric（TOML）
 │   │   ├── schema.py                build_analyze_response_schema / build_check_response_schema /
 │   │   │                            to_json_schema_dict（rubric → 动态输出模型，analyze/check 共用）
-│   │   ├── trial_reader.py          Harbor/pier 朴素 JSON 读取（badcase 筛选 + trial 目录判定）
+│   │   ├── trial_reader.py          Harbor 布局朴素 JSON 读取（badcase 筛选 + trial 目录判定）
 │   │   ├── task_reader.py           task 目录校验（is_valid 等价物 + steps/ 多步检测）+ file_tree 渲染
 │   │   ├── cache.py                 缓存三态：resolve_cache（身份比对）+ write_json（产物+sidecar）
 │   │   ├── analyzer.py              analyze 编排：缓存→渲染→调 backend→校验→落盘→job 级聚合→翻译二跳
@@ -115,7 +115,7 @@ triage-kit/
 │   │   │   ├── harness.py           循环主体 + final-tool 结构化输出（submit_analysis schema 生成 + 强制调用）
 │   │   │   └── tools.py             read_file / glob / grep 三工具 + PathSandbox（白名单 + triage-kit/ 禁读）
 │   │   ├── claude/
-│   │   │   └── harness.py           参照实现：原 pier backend.py 去 pier import（Read/Glob/Grep via Agent SDK）
+│   │   │   └── harness.py           参照实现：原上游 backend.py 去框架 import（Read/Glob/Grep via Agent SDK）
 │   │   └── trae/                    占位（`__init__.py`）；SKILL.md 资产包为 P001
 │   │
 │   └── cli.py                       入口：triage analyze / check / clean
@@ -130,7 +130,7 @@ triage-kit/
 └── pyproject.toml                   依赖仅: pydantic + typer + openai (+ claude_agent_sdk 可选)
 ```
 
-五份 prompt/rubric 资产（analyze 系列 3 + check 系列 2）**逐字节冻结**于 pier 原版（`tests/test_assets.py` 以 sha256 快照守卫），保证资产溯源与对上游 diff 的可同步性；`KNOWN-ISSUES.md` 与未来家族 rubric 不在冻结范围。
+五份 prompt/rubric 资产（analyze 系列 3 + check 系列 2）**逐字节冻结**于上游原版（`tests/test_assets.py` 以 sha256 快照守卫），保证资产溯源与对上游 diff 的可同步性；`KNOWN-ISSUES.md` 与未来家族 rubric 不在冻结范围。
 
 ---
 
@@ -310,7 +310,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 ## 十一、边界与已知取舍
 
 - **失去 SDK 级 structured output 强约束**（general harness）：靠 final-tool 的 tool calling 参数校验兜底，格式漂移风险可控但非零
-- **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与 Harbor/pier 原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项
+- **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项
 - **claude 后端禁读缺口**：judge 禁读机制（第七节）仅覆盖 general 后端；claude 委托 Agent SDK 执行工具（`bypassPermissions`），不经过本地沙箱。待立项
 - **并发无限流调度**：`-j/--jobs` 为固定线程数，无 429 自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
@@ -319,5 +319,5 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **job 模式不透传 --task-dir**：一个 job 的多个 trial 可能来自不同任务，单一路径无法覆盖
 - **assets 解析假定 editable 安装**：`core/assets.py` 以包位置回溯仓库根的 `assets/`，仅在 `pip install -e` 下成立；发布 PyPI 前需改为包资源解析（`importlib.resources`）并将 assets 声明为包数据
 - **rubric 质量的既知局限**：default rubric 为标准 Harbor 模板任务设计，对高工程化数据集存在已知误判点（#3/#4/#5/#7/#11，详见 KNOWN-ISSUES）；check 的真实价值场景是**新任务入库门禁**，而非给成熟数据集复检
-- **check 文案与上游的可同步性**：check.txt 仅改首句（"Pier task"→"a Harbor task"），其余逐字节保留，将来 Harbor 上游 rubric/prompt 更新可 diff 同步
-- **血缘法律留痕**：NOTICE 注明资产派生自 Harbor（Apache 2.0，vendored via pier），assets 内容逐字节保留，命名层完全去 pier 化
+- **check 文案与上游的可同步性**：check.txt 仅改首句的项目名（改为 "a Harbor task"），其余逐字节保留，将来 Harbor 上游 rubric/prompt 更新可 diff 同步
+- **血缘法律留痕**：NOTICE 注明资产派生自 Harbor（Apache 2.0），assets 内容逐字节保留，命名层完全独立

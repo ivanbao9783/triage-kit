@@ -71,7 +71,7 @@ class TestCheckTask:
         assert backend.last_cwd == task
 
     def test_deep_tree_truncated_with_annotation(self, task, rubric, good_response):
-        """方案3（对齐 pier）：check 侧树限深 + 省略标注，深目录不撑爆 prompt。"""
+        """方案3（对齐上游）：check 侧树限深 + 省略标注，深目录不撑爆 prompt。"""
         from triage_kit.core.checker import Checker
 
         deep = task / "tests" / "l1" / "l2" / "l3" / "l4" / "l5" / "l6" / "l7"

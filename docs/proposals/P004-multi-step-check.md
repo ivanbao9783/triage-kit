@@ -10,7 +10,7 @@ validates them, but `Checker.check_task` runs a **single whole-task
 pass** — the per-step expansion once claimed in the v2 design doc was
 never built (fixed in the v3 as-built rewrite). Consequence: for
 multi-step tasks where the root `instruction.md`/`tests/` are empty,
-several criteria lose their subject — the same blind spot Harbor/pier
+several criteria lose their subject — the same blind spot the upstream
 originals have.
 
 ## Goals

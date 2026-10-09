@@ -224,7 +224,7 @@ class TestAnalyzeTrial:
     def test_task_section_lists_key_files_not_full_tree(
         self, trial, tmp_path, rubric
     ):
-        """方案3（对齐 pier）：task_section 手列关键文件，不再渲染全量树。"""
+        """方案3（对齐上游）：task_section 手列关键文件，不再渲染全量树。"""
         from triage_kit.core.analyzer import Analyzer
 
         task_dir = tmp_path / "task"

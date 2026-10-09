@@ -5,8 +5,7 @@ This product includes software and prompt/rubric assets developed by third parti
 
 - The analyze/check prompt templates and rubrics (assets/analyze/*, assets/check/*)
   are derived from the Harbor framework (https://github.com/harbor-framework/harbor),
-  Apache License, Version 2.0, vendored via the pier evaluation framework
-  (datacurve-pier, a Harbor fork).
+  Apache License, Version 2.0.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

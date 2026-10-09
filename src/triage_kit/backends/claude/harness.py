@@ -1,6 +1,6 @@
 """Claude harness: AgentBackend over claude_agent_sdk.
 
-Ported from pier's analyze/backend.py (the reference implementation), with
+Ported from the upstream analyze/backend.py (the reference implementation), with
 two adaptations:
 
 1. Contract fit — returns ``(result, meta)`` (core/contract.py) instead of
@@ -13,7 +13,7 @@ The SDK namespace must expose: ``query`` (async generator), and the
 ``AssistantMessage``/``ResultMessage``/``ToolUseBlock``/``TextBlock``
 classes used for isinstance dispatch.
 
-CLI demo (parameter-compatible with pier's analyze/check)::
+CLI demo (parameter-compatible with the upstream analyze/check)::
 
     export ANTHROPIC_API_KEY=sk-ant-...
     triage analyze <trial_or_job_dir> --backend claude   # -m defaults to haiku

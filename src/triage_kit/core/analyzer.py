@@ -74,7 +74,7 @@ _TRANSLATE_INSTRUCTION = (
 
 
 def _render_task_section(task_dir: Path | None) -> str:
-    """Hand-list key files instead of rendering a full tree (pier parity).
+    """Hand-list key files instead of rendering a full tree (upstream parity).
 
     A full recursive tree would flood the prompt on deep task dirs; the
     agent has read_file/glob/grep tools to explore on demand.

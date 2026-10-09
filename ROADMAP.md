@@ -18,5 +18,3 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P005 | Deterministic contract pre-check layer | feature | medium | proposed | [P005-contract-precheck.md](docs/proposals/P005-contract-precheck.md) |
 | P006 | Diagnosis results viewer | feature | medium | proposed | [P006-diagnosis-viewer.md](docs/proposals/P006-diagnosis-viewer.md) |
 | P007 | Model identity in job aggregation | feature | low | proposed | [P007-model-identity.md](docs/proposals/P007-model-identity.md) |
-
-The README carries only a short summary of this table.

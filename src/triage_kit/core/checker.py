@@ -14,7 +14,7 @@ from triage_kit.core.rubric import Rubric, build_criteria_guidance
 from triage_kit.core.schema import build_check_response_schema
 from triage_kit.core.task_reader import render_file_tree, validate_task_dir
 
-# File-tree guardrails (pier parity + truncation): deep/large task trees must
+# File-tree guardrails (upstream parity + truncation): deep/large task trees must
 # not flood the prompt. Truncation is annotated so the model knows to explore
 # the rest with its read_file/glob/grep tools.
 _MAX_TREE_DEPTH = 6
