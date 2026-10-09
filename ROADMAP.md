@@ -15,5 +15,6 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P002 | deep-swe family rubric | feature | medium | proposed | [P002-deep-swe-rubric.md](docs/proposals/P002-deep-swe-rubric.md) |
 | P003 | Parallel trial analysis (`-j/--jobs`) | optimization | high | proposed | [P003-parallel-analysis.md](docs/proposals/P003-parallel-analysis.md) |
 | P004 | Multi-step per-step check expansion | feature | low | proposed | [P004-multi-step-check.md](docs/proposals/P004-multi-step-check.md) |
+| P005 | Deterministic contract pre-check layer | feature | medium | proposed | [P005-contract-precheck.md](docs/proposals/P005-contract-precheck.md) |
 
 The README carries only a short summary of this table.
