@@ -12,19 +12,44 @@ from pathlib import Path
 
 
 class PathSandbox:
-    """Whitelist-based path resolver: cwd + add_dirs."""
+    """Whitelist-based path resolver: cwd + add_dirs.
+
+    The triage-kit products directory is deny-listed on top of the
+    whitelist: a judge reading its own prior verdicts would anchor on
+    them instead of judging the evidence independently.
+    """
+
+    BLOCKED_NAMES = frozenset({"triage-kit"})
 
     def __init__(self, cwd: Path, add_dirs: list[Path] | None = None):
         self.cwd = Path(cwd).resolve()
         self.roots = [self.cwd] + [Path(d).resolve() for d in (add_dirs or [])]
 
+    def _blocked_root(self, absolute: Path) -> Path | None:
+        """Return the root under whose triage-kit/ this path falls, if any."""
+        for r in self.roots:
+            try:
+                rel = absolute.relative_to(r)
+            except ValueError:
+                continue
+            if rel.parts and rel.parts[0] in self.BLOCKED_NAMES:
+                return r
+        return None
+
     def resolve(self, path: str) -> Path:
-        """Resolve a path against cwd; raise PermissionError outside roots."""
+        """Resolve a path against cwd; raise PermissionError outside roots
+        or inside a blocked products directory."""
         candidate = Path(path)
         absolute = candidate if candidate.is_absolute() else self.cwd / candidate
         absolute = absolute.resolve()
         if not any(absolute == r or absolute.is_relative_to(r) for r in self.roots):
             raise PermissionError(f"path outside allowed roots: {path}")
+        if self._blocked_root(absolute) is not None:
+            raise PermissionError(
+                f"path inside the products directory (triage-kit/ under "
+                f"{self._blocked_root(absolute)}): prior verdicts are not "
+                f"readable by the judge"
+            )
         return absolute
 
 
@@ -74,10 +99,11 @@ class GeneralTools:
 
     def glob(self, pattern: str) -> str:
         matches = [
-            str(p.relative_to(self.cwd))
+            self._display(p)
             for r in self.sandbox.roots
             for p in r.glob(pattern)
             if p.is_file()
+            and self.sandbox._blocked_root(p.resolve()) is None
         ]
         seen: list[str] = []
         for m in matches:
@@ -114,6 +140,7 @@ class GeneralTools:
             else sorted(
                 p for p in absolute.rglob("*") if p.is_file()
                 and (glob is None or fnmatch.fnmatch(p.name, glob))
+                and self.sandbox._blocked_root(p) is None
             )
         )
         results: list[str] = []

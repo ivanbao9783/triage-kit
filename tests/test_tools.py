@@ -219,3 +219,75 @@ class TestGrep:
         lines = out.splitlines()
         assert len(lines) == 201  # 200 matches + 1 annotation
         assert lines[-1] == "... (50 more matches omitted)"
+
+
+class TestProductsDirBlocked:
+    """根治方案：judge 不得读取 triage-kit/ 产物目录（自己的旧判定）。
+
+    三个工具统一拦截：read_file/grep 的显式路径进入 triage-kit/ 报
+    PermissionError；glob 与 rgrep 的遍历结果静默排除（与 check 侧
+    文件树排除策略一致——看得见的路径报错，看不见的遍历过滤）。
+    """
+
+    def test_read_file_into_products_dir_is_rejected(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        tk = cwd / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text('{"prior": "verdict"}',
+                                          encoding="utf-8")
+
+        result = tools.read_file("triage-kit/analysis.json")
+        assert result.startswith("Error")
+        assert "triage-kit" in result
+
+    def test_glob_excludes_products_dir(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        tk = cwd / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text("{}", encoding="utf-8")
+
+        out = tools.glob("**/*.json")
+        assert "triage-kit" not in out
+        assert "result.json" in out          # 正常文件不受影响
+
+    def test_grep_excludes_products_dir_from_traversal(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        tk = cwd / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text('{"reward": "leaked"}',
+                                          encoding="utf-8")
+
+        out = tools.grep("reward")
+        assert "triage-kit" not in out
+        assert "result.json" in out
+
+    def test_grep_explicit_path_into_products_dir_is_rejected(self, env):
+        tools = make_tools(env)
+        cwd, _ = env
+        tk = cwd / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text('{"reward": "leaked"}',
+                                          encoding="utf-8")
+
+        result = tools.grep("reward", path="triage-kit")
+        assert result.startswith("Error")
+
+    def test_products_dir_in_add_dir_is_also_blocked(self, env):
+        """analyze 时 task_dir 作为 add_dir 挂入——其 triage-kit/（check
+        产物）同样禁读，防止 judge 借道任务目录读旧判定。"""
+        cwd, extra = env
+        tk = extra / "triage-kit"
+        tk.mkdir()
+        (tk / "check-result.json").write_text('{"prior": "verdict"}',
+                                              encoding="utf-8")
+
+        tools = make_tools(env, add_dirs=[extra])
+        result = tools.read_file(str(tk / "check-result.json"))
+        assert result.startswith("Error")
+
+        out = tools.glob("**/*.json")
+        assert "triage-kit" not in out
+        assert "instruction.md" in tools.glob("**/*.md")

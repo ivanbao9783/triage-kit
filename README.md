@@ -106,6 +106,8 @@ Both commands reuse cached products by default. A cache hit requires an identity
 
 Task/trial files are read as plain JSON in the Harbor-native layout (trial directories with `result.json`, task directories with `task.toml`), so results produced by standard Harbor jobs work out of the box.
 
+The judge never sees its own prior verdicts: the `triage-kit/` products directory is excluded from the check file tree and deny-listed in the `read_file`/`glob`/`grep` sandbox, so a `--force` rerun is always an independent re-judgment.
+
 Judgment criteria live in data (TOML rubrics); output schemas are generated dynamically from them — extending evaluation dimensions requires zero code changes:
 
 ```
