@@ -1,9 +1,9 @@
 """Task quality inspection: judge a Harbor task directory against a rubric.
 
 Mirrors the Analyzer pattern (same backend contract, same rubric compilation)
-but operates on task directories and writes
-<task_dir>/triage-check-result.json (triage-kit's own naming — not a viewer
-contract, unlike analyze's analysis.json).
+but operates on task directories. Products land in
+<task_dir>/triage-kit/check-result.json — the subdirectory keeps the task
+tree clean of triage output.
 """
 
 from pathlib import Path
@@ -19,6 +19,9 @@ from triage_kit.core.task_reader import render_file_tree, validate_task_dir
 # the rest with its read_file/glob/grep tools.
 _MAX_TREE_DEPTH = 6
 _MAX_TREE_ENTRIES = 200
+
+# Products subdirectory, shared convention with the Analyzer.
+_PRODUCTS_DIR = "triage-kit"
 
 
 class Checker:
@@ -38,10 +41,11 @@ class Checker:
 
     def check_task(self, task_dir: Path) -> dict:
         task_dir = Path(task_dir)
+        products_dir = task_dir / _PRODUCTS_DIR
 
         cached = cache.resolve_cache(
-            cached_path=task_dir / "triage-check-result.json",
-            sidecar_path=task_dir / "triage-check-result.meta.json",
+            cached_path=products_dir / "check-result.json",
+            sidecar_path=products_dir / "check-result.meta.json",
             force=self.force,
             identity=self._identity(),
             schema=self._response_schema,
@@ -69,6 +73,7 @@ class Checker:
         )
         result = self._response_schema.model_validate(raw).model_dump(mode="json")
 
-        cache.write_json(task_dir / "triage-check-result.json", result)
-        cache.write_json(task_dir / "triage-check-result.meta.json", self._identity())
+        products_dir.mkdir(exist_ok=True)
+        cache.write_json(products_dir / "check-result.json", result)
+        cache.write_json(products_dir / "check-result.meta.json", self._identity())
         return result

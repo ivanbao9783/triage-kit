@@ -102,25 +102,32 @@ class TestAnalyzeTrial:
         result = Analyzer(backend=backend, rubric=rubric, model="test-model").analyze_trial(trial)
 
         assert result["trial_name"] == "demo__abc123"
-        assert (trial / "analysis.json").is_file()
-        assert (trial / "analysis.md").is_file()
-        saved = json.loads((trial / "analysis.json").read_text(encoding="utf-8"))
+        assert (trial / "triage-kit" / "analysis.json").is_file()
+        assert (trial / "triage-kit" / "analysis.md").is_file()
+        saved = json.loads(
+            (trial / "triage-kit" / "analysis.json").read_text(encoding="utf-8")
+        )
         assert saved["checks"]["reward_hacking"]["outcome"] == "pass"
 
-    def test_writes_prefixed_markdown_copy(self, trial, rubric):
-        """Q2a: analysis.md 之外双写 triage-kit-analysis.md 前缀副本，
-        内容与 analysis.md 一致（契约文件名保留给 pier viewer）。"""
+    def test_products_live_in_triage_kit_subdirectory(self, trial, rubric):
+        """D1: 产物全部落 <trial>/triage-kit/ 子目录（去前缀），
+        trial 根目录不残留任何 triage 产物。"""
         from triage_kit.core.analyzer import Analyzer
 
         Analyzer(backend=make_backend(GOOD_RESPONSE), rubric=rubric,
                  model="test-model").analyze_trial(trial)
 
-        original = (trial / "analysis.md").read_text(encoding="utf-8")
-        prefixed = (trial / "triage-kit-analysis.md").read_text(encoding="utf-8")
-        assert prefixed == original
+        tk = trial / "triage-kit"
+        assert (tk / "analysis.json").is_file()
+        assert (tk / "analysis.md").is_file()
+        assert (tk / "analysis.meta.json").is_file()
+        # 根目录零残留（既无平铺产物，也无旧前缀副本）
+        assert not (trial / "analysis.json").exists()
+        assert not (trial / "analysis.md").exists()
+        assert not (trial / "triage-kit-analysis.md").exists()
 
-    def test_writes_prefixed_job_markdown_copy(self, tmp_path, rubric):
-        """Q2a: job 级同样双写前缀副本。"""
+    def test_job_products_live_in_triage_kit_subdirectory(self, tmp_path, rubric):
+        """D1: job 级产物同样进 triage-kit/ 子目录。"""
         from triage_kit.core.analyzer import Analyzer
 
         make_trial(tmp_path / "t1__aaa", reward=0.0)
@@ -128,19 +135,20 @@ class TestAnalyzeTrial:
         Analyzer(backend=backend, rubric=rubric,
                  model="test-model").analyze_job(tmp_path)
 
-        original = (tmp_path / "analysis.md").read_text(encoding="utf-8")
-        prefixed = (tmp_path / "triage-kit-analysis.md").read_text(encoding="utf-8")
-        assert prefixed == original
+        tk = tmp_path / "triage-kit"
+        original = (tk / "analysis.md").read_text(encoding="utf-8")
         assert original.startswith("# Job Analysis")
+        assert (tk / "analysis.json").is_file()
+        assert not (tmp_path / "analysis.md").exists()
 
     def test_lang_zh_writes_translated_copy_per_trial_and_job(
         self, tmp_path, rubric
     ):
-        """Q3: --lang zh 在英文产物之外追加 triage-kit-analysis.zh.md。
+        """Q3: --lang zh 在英文产物之外追加 analysis.zh.md。
 
-        翻译二跳：契约文件（analysis.md）保持英文不动，中文是
-        triage-kit 自有命名空间的增量产物。job 级翻译用一次 query，
-        trial 级各一次——本测试共 2 trial + 1 job = 3 次翻译调用。
+        翻译二跳：analysis.md 保持英文不动，中文版是增量产物。
+        job 级翻译用一次 query，trial 级各一次——本测试共
+        2 trial + 1 job = 3 次翻译调用。
         """
         from triage_kit.core.analyzer import Analyzer
 
@@ -162,16 +170,18 @@ class TestAnalyzeTrial:
 
         # trial 级中文副本
         for name in ("t1__aaa", "t2__bbb"):
-            zh = (tmp_path / name / "triage-kit-analysis.zh.md").read_text(
+            zh = (tmp_path / name / "triage-kit" / "analysis.zh.md").read_text(
                 encoding="utf-8"
             )
             assert zh == "TRANSLATED"
         # job 级中文副本
-        assert (tmp_path / "triage-kit-analysis.zh.md").read_text(
+        assert (tmp_path / "triage-kit" / "analysis.zh.md").read_text(
             encoding="utf-8"
         ) == "TRANSLATED"
-        # 英文契约产物不受影响
-        en = (tmp_path / "t1__aaa" / "analysis.md").read_text(encoding="utf-8")
+        # 英文产物与中文版并存
+        en = (tmp_path / "t1__aaa" / "triage-kit" / "analysis.md").read_text(
+            encoding="utf-8"
+        )
         assert "Agent solved it." in en
         # 翻译调用次数：2 trial + 1 job = 3（另有 1 次 job 聚合 query）
         translations = [
@@ -188,7 +198,7 @@ class TestAnalyzeTrial:
                  model="test-model").analyze_trial(trial)
 
         assert len(backend.plain_prompts) == 0
-        assert not (trial / "triage-kit-analysis.zh.md").exists()
+        assert not (trial / "triage-kit" / "analysis.zh.md").exists()
 
     def test_task_dir_override_lands_in_prompt(self, trial, tmp_path, rubric):
         from triage_kit.core.analyzer import Analyzer
@@ -237,8 +247,10 @@ class TestAnalyzeTrial:
 
         cached = {"trial_name": "demo__abc123", "summary": "cached",
                   "checks": GOOD_RESPONSE["checks"]}
-        (trial / "analysis.json").write_text(json.dumps(cached), encoding="utf-8")
-        write_sidecar(trial, "analysis.meta.json", model="test-model",
+        tk = trial / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text(json.dumps(cached), encoding="utf-8")
+        write_sidecar(tk, "analysis.meta.json", model="test-model",
                       rubric_path=ANALYZE_RUBRIC)
 
         backend = make_backend(GOOD_RESPONSE)
@@ -271,8 +283,8 @@ class TestAnalyzeJob:
         assert len(backend.agent_prompts) == 2
         assert len(backend.plain_prompts) == 1
         assert result["summary"] == "JOB SUMMARY"
-        assert (tmp_path / "analysis.json").is_file()
-        assert (tmp_path / "analysis.md").is_file()
+        assert (tmp_path / "triage-kit" / "analysis.json").is_file()
+        assert (tmp_path / "triage-kit" / "analysis.md").is_file()
 
     def test_failing_only_limits_trials(self, tmp_path, rubric):
         from triage_kit.core.analyzer import Analyzer
@@ -298,7 +310,9 @@ class TestAnalyzeJob:
         make_trial(tmp_path / "t1__good", reward=0.0)
         make_trial(tmp_path / "t2__corrupt", reward=0.0)
         # 模拟半写中断/手改：outcome 非法
-        (tmp_path / "t2__corrupt" / "analysis.json").write_text(
+        tk = tmp_path / "t2__corrupt" / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text(
             json.dumps({
                 "trial_name": "t2__corrupt", "summary": "s",
                 "checks": {"reward_hacking":
@@ -307,7 +321,7 @@ class TestAnalyzeJob:
             encoding="utf-8",
         )
         # 身份匹配的 sidecar：确保走的是"校验拒绝"而非"无 sidecar 重跑"
-        write_sidecar(tmp_path / "t2__corrupt", "analysis.meta.json",
+        write_sidecar(tk, "analysis.meta.json",
                       model="test-model", rubric_path=ANALYZE_RUBRIC)
 
         backend = make_backend(dict(GOOD_RESPONSE, trial_name="t1__good"))
@@ -339,7 +353,7 @@ class TestAnalyzeJob:
         with pytest.raises(ValueError, match="empty"):
             Analyzer(backend=EmptySummaryBackend(), rubric=rubric,
                      model="test-model").analyze_job(tmp_path)
-        assert not (tmp_path / "analysis.json").is_file()
+        assert not (tmp_path / "triage-kit" / "analysis.json").exists()
 
     def test_empty_trial_set_short_circuits(self, tmp_path, rubric):
         """#6: 零 trial 时短路返回——不调 LLM、不写任何产物。"""
@@ -356,8 +370,7 @@ class TestAnalyzeJob:
         assert backend.plain_prompts == []        # no aggregation call
         assert backend.agent_prompts == []        # no trial analysis either
         assert result == {"summary": "", "trials": [], "failed_trials": []}
-        assert not (tmp_path / "analysis.json").exists()
-        assert not (tmp_path / "analysis.md").exists()
+        assert not (tmp_path / "triage-kit").exists()
 
     def test_fresh_analysis_writes_identity_sidecar(self, trial, rubric):
         """新鲜产物必须落 sidecar：rubric sha + model（缓存身份）。"""
@@ -366,7 +379,7 @@ class TestAnalyzeJob:
         backend = make_backend(GOOD_RESPONSE)
         Analyzer(backend=backend, rubric=rubric, model="glm-4.7").analyze_trial(trial)
 
-        sidecar = trial / "analysis.meta.json"
+        sidecar = trial / "triage-kit" / "analysis.meta.json"
         assert sidecar.is_file()
         meta = json.loads(sidecar.read_text(encoding="utf-8"))
         assert set(meta) == {"rubric_sha256", "model"}
@@ -392,7 +405,8 @@ class TestAnalyzeJob:
             Analyzer(backend=make_backend(GOOD_RESPONSE), rubric=rubric,
                      model="glm-5.3").analyze_trial(trial)
         # 产物未被覆盖（sidecar model 仍是旧值）
-        meta = json.loads((trial / "analysis.meta.json").read_text())
+        meta = json.loads(
+            (trial / "triage-kit" / "analysis.meta.json").read_text())
         assert meta["model"] == "glm-4.7"
 
         # force=True → 警告并重跑覆盖
@@ -400,7 +414,8 @@ class TestAnalyzeJob:
         Analyzer(backend=backend3, rubric=rubric, model="glm-5.3",
                  force=True).analyze_trial(trial)
         assert len(backend3.agent_prompts) == 1
-        meta = json.loads((trial / "analysis.meta.json").read_text())
+        meta = json.loads(
+            (trial / "triage-kit" / "analysis.meta.json").read_text())
         assert meta["model"] == "glm-5.3"
 
         # 换 rubric（sha 变）→ 同样报错
@@ -419,7 +434,9 @@ class TestAnalyzeJob:
         """旧版产物（无 sidecar）：提示后视为无缓存重跑。"""
         from triage_kit.core.analyzer import Analyzer
 
-        (trial / "analysis.json").write_text(
+        tk = trial / "triage-kit"
+        tk.mkdir()
+        (tk / "analysis.json").write_text(
             json.dumps(GOOD_RESPONSE), encoding="utf-8",
         )
         backend = make_backend(GOOD_RESPONSE)

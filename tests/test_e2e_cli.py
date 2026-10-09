@@ -128,9 +128,9 @@ class TestAnalyzeE2E:
 
         # --- products ---
         analysis = json.loads(
-            (trial / "analysis.json").read_text(encoding="utf-8")
+            (trial / "triage-kit" / "analysis.json").read_text(encoding="utf-8")
         )
-        md = (trial / "analysis.md").read_text(encoding="utf-8")
+        md = (trial / "triage-kit" / "analysis.md").read_text(encoding="utf-8")
         assert analysis["summary"] == SUBMIT["summary"]
         assert analysis["checks"]["reward_hacking"]["outcome"] == "pass"
         assert "# Analysis: demo__e2e" in md

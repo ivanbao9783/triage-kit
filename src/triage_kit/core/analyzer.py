@@ -16,6 +16,10 @@ from triage_kit.core.schema import build_analyze_response_schema
 
 logger = logging.getLogger(__name__)
 
+# All products live in this subdirectory next to the trial/job data,
+# so triage output never scatters into the evaluated directories.
+_PRODUCTS_DIR = "triage-kit"
+
 _DEGRADED_TASK_SECTION = (
     "The task directory is not available locally. "
     "Use the trajectory and test output to infer what the task required."
@@ -79,26 +83,27 @@ class Analyzer:
     def _identity(self) -> dict:
         return {"rubric_sha256": self.rubric.source_sha256, "model": self.model}
 
-    def _translate_markdown(self, directory: Path, markdown: str) -> None:
-        """Second-hop translation: write triage-kit-analysis.zh.md next to
-        the (untouched, English) contract products."""
+    def _translate_markdown(self, products_dir: Path, markdown: str) -> None:
+        """Second-hop translation: write analysis.zh.md next to the
+        (untouched, English) analysis.md inside the products directory."""
         translated, _meta = self.backend.query(
             _TRANSLATE_INSTRUCTION + markdown, model=self.model
         )
         if not translated.strip():
             raise ValueError(
-                f"translation returned empty output (dir={directory.name})"
+                f"translation returned empty output (dir={products_dir.parent.name})"
             )
-        (directory / "triage-kit-analysis.zh.md").write_text(
+        (products_dir / "analysis.zh.md").write_text(
             translated, encoding="utf-8"
         )
 
     def analyze_trial(self, trial_dir: Path, *, task_dir: Path | None = None) -> dict:
         trial_dir = Path(trial_dir)
+        products_dir = trial_dir / _PRODUCTS_DIR
 
         cached = cache.resolve_cache(
-            cached_path=trial_dir / "analysis.json",
-            sidecar_path=trial_dir / "analysis.meta.json",
+            cached_path=products_dir / "analysis.json",
+            sidecar_path=products_dir / "analysis.meta.json",
             force=self.force,
             identity=self._identity(),
             schema=self._response_schema,
@@ -127,15 +132,13 @@ class Analyzer:
                 f"to a different trial"
             )
 
-        cache.write_json(trial_dir / "analysis.json", analysis)
+        products_dir.mkdir(exist_ok=True)
+        cache.write_json(products_dir / "analysis.json", analysis)
         markdown = _render_analysis_md(analysis)
-        # analysis.md is the pier-viewer contract name; the prefixed copy
-        # exists so triage-kit products are recognizable at a glance.
-        (trial_dir / "analysis.md").write_text(markdown, encoding="utf-8")
-        (trial_dir / "triage-kit-analysis.md").write_text(markdown, encoding="utf-8")
+        (products_dir / "analysis.md").write_text(markdown, encoding="utf-8")
         if self.lang == "zh":
-            self._translate_markdown(trial_dir, markdown)
-        cache.write_json(trial_dir / "analysis.meta.json", self._identity())
+            self._translate_markdown(products_dir, markdown)
+        cache.write_json(products_dir / "analysis.meta.json", self._identity())
         return analysis
 
     def analyze_job(self, job_dir: Path, *, failing_only: bool = False) -> dict:
@@ -170,10 +173,11 @@ class Analyzer:
             "trials": trial_results,
             "failed_trials": failed_trials,
         }
-        cache.write_json(job_dir / "analysis.json", result)
+        products_dir = job_dir / _PRODUCTS_DIR
+        products_dir.mkdir(exist_ok=True)
+        cache.write_json(products_dir / "analysis.json", result)
         markdown = f"# Job Analysis\n\n{summary}\n"
-        (job_dir / "analysis.md").write_text(markdown, encoding="utf-8")
-        (job_dir / "triage-kit-analysis.md").write_text(markdown, encoding="utf-8")
+        (products_dir / "analysis.md").write_text(markdown, encoding="utf-8")
         if self.lang == "zh":
-            self._translate_markdown(job_dir, markdown)
+            self._translate_markdown(products_dir, markdown)
         return result

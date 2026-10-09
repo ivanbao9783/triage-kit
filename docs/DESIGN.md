@@ -14,7 +14,7 @@ pier（Harbor fork）提供了一套 LLM 驱动的评测后处理能力（badcas
 
 **血缘查证结论（2026-10-08，经 Harbor 上游核实）**：`analyze` 与 `check` 均为从 Harbor **vendored**（原样搬运）的能力（对应 Harbor 原生 `harbor task debug` 与 `harbor task check`），其 prompt/rubric 资产是 Harbor 生态的公共资产。多步任务（steps/）与 Windows 支持（TaskOS/.bat）亦为 Harbor 原生格式，非 pier 发明；经查证 pier 在任务格式层唯一真实的新增是 `pre_artifacts.sh`。
 
-因此 triage-kit 的解耦本质是**恢复这些资产的 Harbor-native 本来形态**（回归上游原始定位），而非移植改造。triage-kit 的目标：**将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包**，agent 粒度后端可插拔（general harness 挂任意 OpenAI-compatible LLM），原生兼容 Harbor 任务与评测结果，产物格式保持 pier/Harbor viewer 可读，覆盖"任务质量 → 评测 → 归因"完整链条。
+因此 triage-kit 的解耦本质是**恢复这些资产的 Harbor-native 本来形态**（回归上游原始定位），而非移植改造。triage-kit 的目标：**将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包**，agent 粒度后端可插拔（general harness 挂任意 OpenAI-compatible LLM），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（未来 triage-kit 自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因"完整链条。
 
 **核心设计哲学继承自 pier 原版**：把"判定标准"从 prompt 里抽出来变成数据（rubric），让输出 schema 随 rubric 动态生成，实现无改码的评测维度扩展。
 
@@ -30,12 +30,12 @@ pier（Harbor fork）提供了一套 LLM 驱动的评测后处理能力（badcas
 | check 融合 | **check（任务质检）纳入首批范围**，与 analyze 共享契约/编译管线/全部三个 harness，引擎零新增——仅增加 `task_reader` + `checker` 编排 + `triage check` 子命令 |
 | 多步任务策略 | 检测到 `steps/` 时**逐 step 展开**检查（per-step 结果 + 汇总），修复 Harbor 上游继承的盲区（根目录 instruction/tests 为空时 criteria 失效），是 triage-kit 相对上游的第一个增值点 |
 | check 文案 | check.txt 首句 "Pier task" 改回 "**a Harbor task**"——恢复上游原貌，保持与 Harbor 资产的可 diff 同步性 |
-| check 产物 | 落盘 `<task_dir>/triage-check-result.json`（与 task 同居便于归档；非 viewer 契约文件，用前缀命名）；analyze 产物路径不变 |
+| check 产物 | 落盘 `<task_dir>/triage-kit/check-result.json`（子目录隔离，task 树保持干净）；analyze 产物同样进 `triage-kit/` 子目录 |
 | 结构化输出 | general harness 用 final-tool 技巧（`submit_analysis` 强制调用，tool calling 参数校验兜底） |
 | 安全与预算 | general harness 内置路径沙箱（cwd∪add_dirs 白名单）+ max_turns + 工具输出截断 |
 | 日志 | 可选，general harness 内部，至少含完整工具调用序列 |
 | 包形态 | 先内部模块，出现第二个消费者（critique 迁移等）再拆独立包 |
-| analyze 产物契约 | `analysis.json/md` 格式与落盘路径不变，pier viewer 可读；额外双写 `triage-kit-analysis.md` 前缀副本（内容一致，便于辨认），`--lang zh` 时追加翻译版 `triage-kit-analysis.zh.md`（契约文件保持英文不动） |
+| analyze 产物 | 全部落 `<dir>/triage-kit/` 子目录：`analysis.json` + `analysis.md` + `analysis.meta.json`（缓存 sidecar），`--lang zh` 时追加 `analysis.zh.md`（英文产物不动）。产物 schema 保持稳定（未来 triage-kit 自建 viewer 按此读取）——不再绑定 pier viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来 viewer 自建，可自由采用新布局） |
 | task 目录 | analyze 的降级路径按主路径设计（跨机器拷贝场景 task path 必然失效），支持 `--task-dir` 覆盖 |
 | 项目名 | `triage-kit`（去 pier 化命名；NOTICE 保留 Harbor Apache 2.0 血缘致谢） |
 
@@ -99,7 +99,7 @@ triage-kit/
 │   ├── trial_reader.py              Harbor/pier 朴素 JSON 读取（badcase 筛选 + task 目录定位 + 降级）
 │   ├── task_reader.py               task 目录定位 + is_valid 等价校验 + 多步任务检测（steps/ 存在时逐 step 展开）
 │   ├── analyzer.py                  analyze 编排：缓存→渲染→调 backend→校验→落盘→二级聚合
-│   └── checker.py                   check 编排：file_tree 渲染→单次调用→校验→落盘 triage-check-result.json；多步时逐 step
+│   └── checker.py                   check 编排：file_tree 渲染→单次调用→校验→落盘 triage-kit/check-result.json；多步时逐 step
 │
 ├── backends/                        ← 【实现层】契约的三个实现，互不知晓
 │   ├── general/                     general harness（自研工具循环）
@@ -135,7 +135,7 @@ triage analyze <trial> --backend general --rubric my-rubric.toml
 # Claude 参照实现（对照验证 general harness 归因质量）
 triage analyze <trial> --backend claude -m sonnet
 
-# 任务质量检查（评测前预检，排除任务缺陷导致的伪 badcase；产物落盘 <task_dir>/triage-check-result.json）
+# 任务质量检查（评测前预检，排除任务缺陷导致的伪 badcase；产物落盘 <task_dir>/triage-kit/check-result.json）
 triage check <task_dir>
 
 # 家族定制 rubric（显式指定；或按目录特征自动探测，如 tests/ 含 grader.py+config.json 即 deep-swe 家族）
@@ -162,25 +162,25 @@ triage analyze <trial> --task-dir /local/path/to/task
 
 ## 六、执行结果：产物布局
 
-对 job 目录跑完后（与 pier viewer 兼容）：
+对 job 目录跑完后：
 
 ```
 <job_dir>/                                       ← job 目录
-├── analysis.json                               【新增】job 级聚合
-├── analysis.md                                 【新增】job_summary 文本版
-├── triage-kit-analysis.md                      【新增】前缀副本（内容同 analysis.md）
-├── triage-kit-analysis.zh.md                  【可选】--lang zh 时的中文翻译版
+├── triage-kit/                                【新增】job 级产物目录
+│   ├── analysis.json                           job 级聚合
+│   ├── analysis.md                             job_summary 文本版
+│   └── analysis.zh.md                          【可选】--lang zh 时的中文翻译版
 └── ts-pattern-match-each__9giF4pL/
     ├── result.json                             （原有，只读）
     ├── agent/trajectory.json                  （原有，只读——judge 的证据源）
-    ├── analysis.json                           【新增】单 trial 归因
-    ├── analysis.md                            【新增】人读版
-    ├── analysis.meta.json                     【新增】缓存身份 sidecar（rubric sha + model）
-    ├── triage-kit-analysis.md                【新增】前缀副本（内容同 analysis.md）
-    └── triage-kit-analysis.zh.md              【可选】--lang zh 时的中文翻译版
+    └── triage-kit/                            【新增】trial 级产物目录
+        ├── analysis.json                       单 trial 归因
+        ├── analysis.md                         人读版
+        ├── analysis.meta.json                  缓存身份 sidecar（rubric sha + model）
+        └── analysis.zh.md                      【可选】--lang zh 时的中文翻译版
 ```
 
-命名分两层：`analysis.json/md` 是 pier viewer 的契约文件名（冻结，不可改）；`triage-kit-*` 是自有命名空间（前缀副本、中文翻译版），只增不覆盖契约产物。
+产物全部收进 `triage-kit/` 子目录：被评测目录保持零污染，重置产物只需删一个目录，且不会误伤 trial 的原始评测数据。
 
 `analysis.json` 内容示例：
 
@@ -209,12 +209,13 @@ triage analyze <trial> --task-dir /local/path/to/task
 
 ```
 <task_dir>/
-├── triage-check-result.json               【新增】11 条 criteria 判定结果
-├── triage-check-result.meta.json          【新增】缓存身份 sidecar
-└── （多步任务时：steps/<step-n>/triage-check-result.json + 顶层汇总）
+├── triage-kit/
+│   ├── check-result.json               【新增】11 条 criteria 判定结果
+│   └── check-result.meta.json          【新增】缓存身份 sidecar
+└── （多步任务时：steps/<step-n>/triage-kit/check-result.json + 顶层汇总）
 ```
 
-`triage-check-result.json` 内容示例：
+`check-result.json` 内容示例：
 
 ```json
 {
@@ -243,7 +244,7 @@ triage analyze <trial> --task-dir /local/path/to/task
 用户触发 → trial_reader 朴素读 result.json（筛 badcase / 定位 task 目录，Harbor 原生兼容）
         → analyzer 渲染 prompt（assets 模板 + rubric 编译产物 guidance/schema）
         → backend（三选一）执行 agent 循环，返回 (result, meta)
-        → schema 校验（失败提示换更强模型）→ analysis.json/md 落盘（viewer 可读）+ 前缀副本双写（--lang zh 时追加翻译二跳）
+        → schema 校验（失败提示换更强模型）→ analysis.json/md/meta 落盘到 triage-kit/ 子目录（--lang zh 时追加翻译二跳）
         → job 级二级聚合（各 trial summary + checks 拼接，无工具纯 LLM 调用）
 ```
 
@@ -253,7 +254,7 @@ triage analyze <trial> --task-dir /local/path/to/task
 用户触发 → task_reader 校验 task 目录（is_valid 等价物；steps/ 存在则逐 step 展开）
         → checker 渲染 prompt（file_tree + criteria_guidance 注入）
         → backend（三选一）执行 agent 循环，返回 (result, meta)
-        → schema 校验 → triage-check-result.json 落盘（多步：per-step + 汇总）
+        → schema 校验 → triage-kit/check-result.json 落盘（多步：per-step + 汇总）
 ```
 
 ---
@@ -302,7 +303,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 6. **task_reader + Checker**：task 目录校验（is_valid 等价物）、file_tree 渲染、多步任务逐 step 展开、check-result.json 落盘
 7. **CLI 入口**：typer 命令（`triage analyze` + `triage check`，含 `-r` rubric 选择与家族自动探测）+ 后端选择装配
 8. **trae harness**：SKILL.md 包装同一套 assets（analyze 与 check 作为并列工作流）
-9. **端到端验证**：对真实 Harbor job 的 trial 实跑 analyze；对 DeepSWE 数据集任务实跑 check（default 与 deep-swe rubric 各跑一遍，结果差异本身即 KNOWN-ISSUES 的实证）；claude/general 双后端对照归因；产物回灌 pier viewer 验证兼容
+9. **端到端验证**：对真实 Harbor job 的 trial 实跑 analyze；对 DeepSWE 数据集任务实跑 check（default 与 deep-swe rubric 各跑一遍，结果差异本身即 KNOWN-ISSUES 的实证）；claude/general 双后端对照归因
 
 **第二批（全流程打通后）**：
 

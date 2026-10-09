@@ -226,7 +226,7 @@ class TestContractIntegration:
 
         assert result["summary"] == "Agent failed early."
         assert result["checks"]["reward_hacking"]["outcome"] == "pass"
-        assert (trial / "analysis.json").is_file()
+        assert (trial / "triage-kit" / "analysis.json").is_file()
         # the agent actually read the trial file through the sandbox
         read_args = json.loads(
             client.calls[1]["messages"][1]["tool_calls"][0]["function"]

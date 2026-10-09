@@ -133,7 +133,8 @@ class TestAnalyzeCommand:
             app, ["analyze", str(trial), "--model", "glm-5.3", "--force"]
         )
         assert result.exit_code == 0, result.output
-        meta = json.loads((trial / "analysis.meta.json").read_text())
+        meta = json.loads(
+            (trial / "triage-kit" / "analysis.meta.json").read_text())
         assert meta["model"] == "glm-5.3"
 
     def test_trial_dir_writes_analysis(self, fake_backend, trial):
@@ -142,8 +143,8 @@ class TestAnalyzeCommand:
         result = runner.invoke(app, ["analyze", str(trial), "--model", "m1"])
 
         assert result.exit_code == 0, result.output
-        assert (trial / "analysis.json").is_file()
-        assert (trial / "analysis.md").is_file()
+        assert (trial / "triage-kit" / "analysis.json").is_file()
+        assert (trial / "triage-kit" / "analysis.md").is_file()
         assert len(fake_backend.agent_prompts) == 1
         assert fake_backend.calls[0]["cwd"] == str(trial)
 
@@ -159,7 +160,7 @@ class TestAnalyzeCommand:
         # both trials + one aggregation
         assert len(fake_backend.agent_prompts) == 2
         assert len(fake_backend.plain_prompts) == 1
-        assert (tmp_path / "analysis.json").is_file()
+        assert (tmp_path / "triage-kit" / "analysis.json").is_file()
 
     def test_failing_flag_limits_trials(self, fake_backend, tmp_path):
         from triage_kit.cli import app
@@ -208,7 +209,8 @@ class TestAnalyzeCommand:
         assert result.exit_code == 0, result.output
         # the custom criterion name reaches the prompt
         assert "only_one" in fake_backend.agent_prompts[0]
-        saved = json.loads((trial / "analysis.json").read_text(encoding="utf-8"))
+        saved = json.loads(
+            (trial / "triage-kit" / "analysis.json").read_text(encoding="utf-8"))
         assert "only_one" in saved["checks"]
 
     def test_task_dir_option_nonexistent_errors(self, fake_backend, trial,
@@ -307,7 +309,7 @@ class TestCheckCommand:
         result = runner.invoke(app, ["check", str(task), "--model", "m1"])
 
         assert result.exit_code == 0, result.output
-        out = task / "triage-check-result.json"
+        out = task / "triage-kit" / "check-result.json"
         assert out.is_file()
         saved = json.loads(out.read_text(encoding="utf-8"))
         assert "behavior_in_task_description" in saved["checks"]
@@ -332,7 +334,7 @@ class TestCheckCommand:
 
         assert result.exit_code == 0, result.output
         saved = json.loads(
-            (task / "triage-check-result.json").read_text(encoding="utf-8")
+            (task / "triage-kit" / "check-result.json").read_text(encoding="utf-8")
         )
         assert list(saved["checks"]) == ["one_check"]
 
