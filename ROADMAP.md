@@ -14,5 +14,6 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P001 | trae harness SKILL.md asset pack | feature | medium | proposed | [P001-skill-trae-harness.md](docs/proposals/P001-skill-trae-harness.md) |
 | P002 | deep-swe family rubric | feature | medium | proposed | [P002-deep-swe-rubric.md](docs/proposals/P002-deep-swe-rubric.md) |
 | P003 | Parallel trial analysis (`-j/--jobs`) | optimization | high | proposed | [P003-parallel-analysis.md](docs/proposals/P003-parallel-analysis.md) |
+| P004 | Multi-step per-step check expansion | feature | low | proposed | [P004-multi-step-check.md](docs/proposals/P004-multi-step-check.md) |
 
 The README carries only a short summary of this table.
