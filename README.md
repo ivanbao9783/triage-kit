@@ -18,11 +18,17 @@ pip install -e ".[general]"        # OpenAI-compatible backends (GLM / DeepSeek 
 export OPENAI_API_KEY=...
 
 # 3. run over a Harbor job directory (failing trials only)
-triage analyze outputs/job/details --failing --backend general --model glm-4.7
+triage analyze outputs/job/details --failing --backend general \
+    --model deepseek-pro --base-url https://api.deepseek.com
 
-# 4. inspect the products — in the triage-kit/ subdirectory
-cat outputs/job/details/<trial>/triage-kit/analysis.md     # human-readable attribution
-cat outputs/job/details/<trial>/triage-kit/analysis.json  # machine-readable (same schema)
+# 4. inspect the products — job overview first, then per-trial reports
+cat outputs/job/details/triage-kit/analysis.md            # job-level overview (aggregated verdicts)
+cat outputs/job/details/<trial>/triage-kit/analysis.md    # single-trial attribution (human-readable)
+cat outputs/job/details/<trial>/triage-kit/analysis.json # single-trial attribution (machine-readable)
+
+# 5. restore the evaluated directory when done
+triage clean outputs/job/details         # dry-run: list the product directories it would remove
+triage clean outputs/job/details --yes   # actually delete — original evaluation data stays untouched
 ```
 
 Add `--lang zh` to also get a Simplified-Chinese copy (`analysis.zh.md`) of every report.
