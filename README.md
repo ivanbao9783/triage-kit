@@ -19,7 +19,7 @@ export OPENAI_API_KEY=...
 
 # 3. run over a Harbor job directory (failing trials only)
 triage analyze outputs/job/details --failing --backend general \
-    --model deepseek-pro --base-url https://api.deepseek.com
+    --model deepseek-flash --base-url https://api.deepseek.com
 
 # 4. inspect the products — job overview first, then per-trial reports
 cat outputs/job/details/triage-kit/analysis.md            # job-level overview (aggregated verdicts)
@@ -36,7 +36,8 @@ Add `--lang zh` to also get a Simplified-Chinese copy (`analysis.zh.md`) of ever
 For task quality inspection before running an evaluation:
 
 ```bash
-triage check path/to/task --backend general --model glm-4.7
+triage check path/to/task --backend general \
+    --model deepseek-flash --base-url https://api.deepseek.com
 cat path/to/task/triage-kit/check-result.json
 ```
 
