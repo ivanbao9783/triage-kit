@@ -251,7 +251,10 @@ def clean(
     # Products only ever land in <dir>/triage-kit/, so removal is a
     # directory-name search — the original evaluation data never
     # matches and stays untouched.
-    targets = sorted(p for p in path.rglob("triage-kit") if p.is_dir())
+    try:
+        targets = sorted(p for p in path.rglob("triage-kit") if p.is_dir())
+    except OSError as e:
+        _fail(f"cannot scan {path}: {e}")
     if not targets:
         typer.echo("No triage-kit product directories found.")
         return
@@ -260,9 +263,23 @@ def clean(
     for t in targets:
         typer.echo(f"{verb} {t}")
     if yes:
+        # A locked/forbidden target must not abort the remaining
+        # removals — report it, keep going, exit non-zero at the end.
+        failures = 0
         for t in targets:
-            if t.exists():
+            if not t.exists():
+                continue
+            try:
                 shutil.rmtree(t)
+            except OSError as e:
+                failures += 1
+                typer.echo(f"error: failed to remove {t}: {e}", err=True)
+        if failures:
+            typer.echo(
+                f"error: {failures} of {len(targets)} removal(s) failed",
+                err=True,
+            )
+            raise typer.Exit(1)
         typer.echo(f"{len(targets)} product directory(ies) removed.")
     else:
         typer.echo(

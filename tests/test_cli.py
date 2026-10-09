@@ -417,6 +417,62 @@ class TestCleanCommand:
             app, ["clean", str(tmp_path / "no-such-dir")]
         )
         assert result.exit_code != 0
+        assert "path not found" in result.stderr
+
+    def test_path_is_file_errors(self, tmp_path):
+        """路径是文件：明确报"not a directory"，不是 traceback。"""
+        from triage_kit.cli import app
+
+        f = tmp_path / "afile.txt"
+        f.write_text("x", encoding="utf-8")
+        result = runner.invoke(app, ["clean", str(f)])
+
+        assert result.exit_code != 0
+        assert "not a directory" in result.stderr
+
+    def test_scan_permission_error_fails_with_clear_message(
+        self, tmp_path, monkeypatch
+    ):
+        """rglob 扫描权限不足：报"cannot scan"，不崩溃成 traceback。"""
+        from triage_kit.cli import app
+
+        def boom(self, pattern):
+            raise PermissionError("Access is denied")
+
+        monkeypatch.setattr(Path, "rglob", boom)
+        result = runner.invoke(app, ["clean", str(tmp_path)])
+
+        assert result.exit_code != 0
+        assert "cannot scan" in result.stderr
+        # handled (SystemExit), not an uncaught crash
+        assert not isinstance(result.exception, PermissionError)
+
+    def test_remove_failure_names_target_and_continues(
+        self, tmp_path, monkeypatch
+    ):
+        """rmtree 单个目标失败：点名失败目录，其余照删，非零退出。"""
+        import shutil as shutil_mod
+
+        from triage_kit.cli import app
+
+        job = self._make_job_with_products(tmp_path)
+        locked = job / "t1__aaa" / "triage-kit"
+        real_rmtree = shutil_mod.rmtree
+
+        def rmtree_or_raise(target, *a, **kw):
+            if Path(target) == locked:
+                raise PermissionError(f"Access is denied: {target}")
+            return real_rmtree(target, *a, **kw)
+
+        monkeypatch.setattr(shutil_mod, "rmtree", rmtree_or_raise)
+        result = runner.invoke(app, ["clean", str(job), "--yes"])
+
+        assert result.exit_code != 0
+        assert "failed to remove" in result.stderr
+        assert str(locked) in result.stderr
+        # 其余目标不受牵连
+        assert not (job / "triage-kit").exists()
+        assert locked.exists()
 
 
 class TestBackendSelection:
