@@ -16,10 +16,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO))            # for tests.test_trial_reader
+sys.path.insert(0, str(REPO))            # for tests.conftest
 sys.path.insert(0, str(REPO / "src"))    # for triage_kit
 
-from tests.test_trial_reader import make_trial  # noqa: E402
+from tests.conftest import make_trial  # noqa: E402
 
 SUBMIT = {
     "trial_name": "demo__e2e",
