@@ -516,7 +516,7 @@ class TestBackendSelection:
         assert captured["name"] == "claude"
 
     def test_base_url_option_removed(self, trial):
-        """--base-url retired with the general backend (P014): endpoint
+        """--base-url retired with the general backend (P012): endpoint
         override is via the ANTHROPIC_BASE_URL environment variable."""
         from triage_kit.cli import app
 

@@ -18,9 +18,9 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P005 | Deterministic contract pre-check layer | feature | medium | proposed | [P005-contract-precheck.md](docs/proposals/P005-contract-precheck.md) |
 | P006 | Diagnosis results viewer | feature | medium | proposed | [P006-diagnosis-viewer.md](docs/proposals/P006-diagnosis-viewer.md) |
 | P007 | Model identity in job aggregation | feature | low | proposed | [P007-model-identity.md](docs/proposals/P007-model-identity.md) |
-| P010 | Single-item flows: verification + documentation | docs | low | proposed | [P010-single-item-flows-docs.md](docs/proposals/P010-single-item-flows-docs.md) |
-| P011 | Native Chinese reports (replace translation hop) | optimization | medium | building | [P011-native-zh-reports.md](docs/proposals/P011-native-zh-reports.md) |
-| P012 | Job aggregation summary quality | feature | medium | proposed | [P012-job-aggregation-quality.md](docs/proposals/P012-job-aggregation-quality.md) |
-| P013 | Run log persistence under triage-kit/ | feature | medium | proposed | [P013-run-log-persistence.md](docs/proposals/P013-run-log-persistence.md) |
-| P014 | Claude Agent SDK backend as the primary (and only) harness | refactor | high | landed | [P014-claude-backend-primary.md](docs/proposals/P014-claude-backend-primary.md) |
-| P015 | Judge sandbox gap on the claude backend path | feature | medium | proposed | [P015-judge-sandbox-claude-path.md](docs/proposals/P015-judge-sandbox-claude-path.md) |
+| P008 | Single-item flows: verification + documentation | docs | low | proposed | [P008-single-item-flows-docs.md](docs/proposals/P008-single-item-flows-docs.md) |
+| P009 | Native Chinese reports (`--lang` selects `analysis.md` language) | optimization | medium | building | [P009-native-zh-reports.md](docs/proposals/P009-native-zh-reports.md) |
+| P010 | Job aggregation summary quality | feature | medium | proposed | [P010-job-aggregation-quality.md](docs/proposals/P010-job-aggregation-quality.md) |
+| P011 | Run log persistence under triage-kit/ | feature | medium | proposed | [P011-run-log-persistence.md](docs/proposals/P011-run-log-persistence.md) |
+| P012 | Claude Agent SDK backend as the primary (and only) harness | refactor | high | landed | [P012-claude-backend-primary.md](docs/proposals/P012-claude-backend-primary.md) |
+| P013 | Judge sandbox gap on the claude backend path | feature | medium | proposed | [P013-judge-sandbox-claude-path.md](docs/proposals/P013-judge-sandbox-claude-path.md) |

@@ -121,7 +121,7 @@ Both commands reuse cached products by default. A cache hit requires an identity
 
 Task/trial files are read as plain JSON in the Harbor-native layout (trial directories with `result.json`, task directories with `task.toml`), so results produced by standard Harbor jobs work out of the box.
 
-The judge never sees its own prior verdicts on the check path: the `triage-kit/` products directory is excluded from the check file tree, so a `--force` re-check is an independent re-judgment. (On the analyze path the claude backend delegates tool execution to the SDK's CLI, which currently has no such deny-list — a known gap tracked as P015 in the roadmap.)
+The judge never sees its own prior verdicts on the check path: the `triage-kit/` products directory is excluded from the check file tree, so a `--force` re-check is an independent re-judgment. (On the analyze path the claude backend delegates tool execution to the SDK's CLI, which currently has no such deny-list — a known gap tracked as P013 in the roadmap.)
 
 Judgment criteria live in data (TOML rubrics); output schemas are generated dynamically from them — extending evaluation dimensions requires zero code changes:
 

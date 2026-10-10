@@ -1,4 +1,4 @@
-# P014 — Claude Agent SDK backend as the primary (and only) harness
+# P012 — Claude Agent SDK backend as the primary (and only) harness
 
 Status: **landed** · Type: refactor · Priority: high
 
@@ -50,7 +50,7 @@ Claude Code compatibility, so coverage is wider than "Anthropic only".
 - No codex/deepseek-harness backend implementation here (separate
   future entries; `--backend` keeps the extension seam).
 - No judge sandbox work in this entry (the CLI Read/Glob/Grep do not
-  pass through our deny-list — filed as P015).
+  pass through our deny-list — filed as P013).
 - No `--base-url` re-introduction; endpoint override stays via
   `ANTHROPIC_BASE_URL` (verified working against DeepSeek).
 - No changes to rubric/prompt assets, product schemas, or caching
@@ -87,9 +87,12 @@ User-confirmed decisions (2026-10-10):
    claude-agent-sdk; extras reduce to `dev`; new thin
    `requirements.txt` (`-e .[dev]`) — pyproject stays the single
    dependency source of truth.
-6. ROADMAP: P008/P009 → dropped (defect carrier retired); P015 filed
-   (sandbox gap); docs (README/DESIGN) rewritten to the single-backend
-   shape with DeepSeek-via-`ANTHROPIC_BASE_URL` as the worked example.
+6. ROADMAP: the two general-harness defect entries (forced tool_choice
+   400s; tool exception isolation) → dropped (defect carrier retired;
+   dropped docs later removed and IDs renumbered); the sandbox gap
+   filed (now P013); docs (README/DESIGN) rewritten to the
+   single-backend shape with DeepSeek-via-`ANTHROPIC_BASE_URL` as the
+   worked example.
 
 ## Compatibility impact
 
@@ -97,7 +100,7 @@ User-confirmed decisions (2026-10-10):
   (error); `--backend claude` + `-m` + `ANTHROPIC_BASE_URL` is the
   new canonical form. README quick-start updated accordingly.
 - Products/schemas/cache identity unchanged.
-- Known regression (accepted, filed as P015): judge can read
+- Known regression (accepted, filed as P013): judge can read
   `triage-kit/` products via CLI tools on the claude path — the
   general-only deny-list disappears with it.
 
@@ -116,7 +119,8 @@ User-confirmed decisions (2026-10-10):
 - Recovery E2E (`triage analyze details --failing -m deepseek-flash
   --lang zh -j 8`, `ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic`):
   - 47/47 trials produced products, `failed_trials: []` — 26 cache
-    hits + 21 re-analyzed (all badcases lost to P008/P009 recovered
+    hits + 21 re-analyzed (all badcases lost to the two dropped
+    general-harness defects recovered
     with complete verdicts; e.g. `bandit-incremental-cache-control__S7DF6Qj`,
     previously killed at the forcing turn, finished autonomously).
   - Verdict distribution: `reward_hacking` 47 pass;
@@ -133,6 +137,7 @@ User-confirmed decisions (2026-10-10):
 ## Status & links
 
 - Accepted 2026-10-10 (user decisions on backend option retention,
-  requirements.txt form, P008/P009 drop, test removal).
+  requirements.txt form, dropping the two general-harness defect
+  entries, test removal).
 - Landed 2026-10-10 (verification plan fully green, see above).
-  Related: P015 (sandbox gap), P008/P009 (dropped).
+  Related: P013 (sandbox gap).

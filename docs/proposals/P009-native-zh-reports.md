@@ -1,4 +1,4 @@
-# P011 — Native Chinese reports (replace translation hop)
+# P009 — Native Chinese reports (`--lang` selects `analysis.md` language)
 
 Status: **building** · Type: optimization · Priority: medium
 Scope revision (2026-10-10, user decision): `analysis.zh.md` is retired;
@@ -29,22 +29,14 @@ Root cause: the model is instructed to *translate*, so it performs
 sentence-level re-rendering of English prose instead of composing in
 Chinese.
 
-## Goals
-
-- `analysis.zh.md` reads as natively written Chinese technical prose,
-  not a translation of English.
-- English contract products stay untouched (`analysis.json`,
-  `analysis.md` remain the stable schema-bearing artifacts).
-
 ## Non-goals
 
 - No change to frozen assets — the zh prompt is inline code, and the
   analyze prompt/rubric assets stay byte-frozen.
-- No new product files (still one `analysis.zh.md` per level).
 - No locale framework / multi-language generalization (zh only, as
   today).
 - No job-aggregation quality work (the summary content itself is
-  P012's scope; P011 only changes how the zh report is composed).
+  P010's scope; P009 only changes how the zh report is composed).
 
 ## Current state & gap
 
@@ -85,12 +77,14 @@ User-confirmed decisions (2026-10-10, Gate 1):
    compose prompt; one instruction constant, two input shapes
    (trial JSON payload / job summary).
 
-Code shape: `_TRANSLATE_INSTRUCTION` → `_ZH_COMPOSE_INSTRUCTION`
-(Chinese text); `_translate_markdown(products_dir, markdown)` →
-`_compose_zh_report(products_dir, payload)` where payload is the
-structured source; both `analyze_trial` and the job path pass their
-dict/summary instead of the rendered markdown. Empty-output guard and
-`analysis.zh.md` naming/placement unchanged.
+Code shape: `_TRANSLATE_INSTRUCTION` → the Chinese rules block +
+level-specific skeletons (`_ZH_COMPOSE_RULES`, `_ZH_TRIAL_COMPOSE`,
+`_ZH_JOB_COMPOSE`); `_translate_markdown(products_dir, markdown)` →
+`_compose_zh_report(products_dir, instruction, md_name, payload)`
+where payload is the structured source; both `analyze_trial` and the
+job path pass their dict/summary instead of the rendered markdown,
+and the composed report is written as `analysis.md` (route B).
+Empty-output guard unchanged.
 
 ### Payload contract (finalized 2026-10-10)
 
@@ -171,5 +165,5 @@ diverge on verdicts, breaking the zh/JSON consistency guarantee.
   (md language follows `--lang`, JSON stays English) + cache-hit
   decision (i) (no compose on hit, `--force` to regenerate).
   Evidence: `details/triage-kit/analysis.zh.md` translationese
-  observed in live E2E. Related: P012 (job summary quality —
+  observed in live E2E. Related: P010 (job summary quality —
   orthogonal).

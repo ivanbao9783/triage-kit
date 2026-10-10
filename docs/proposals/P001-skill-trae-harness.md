@@ -6,7 +6,7 @@ Status: **proposed** · Type: feature · Priority: medium
 ## Background & motivation
 
 The CLI currently accepts `--backend claude` only (general was retired
-by P014; codex / DeepSeek harness backends are planned). The trae
+by P012; codex / DeepSeek harness backends are planned). The trae
 harness (running the judge inside the trae agent environment) exists
 as a **skill form**, not a CLI backend — this was a deliberate scope
 decision recorded during M1–M7 (see `docs/DESIGN.md`). M8 — authoring

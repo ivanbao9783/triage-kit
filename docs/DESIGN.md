@@ -1,7 +1,7 @@
 # triage-kit 设计文档
 
 > 从 Harbor 生态评测工具链解耦的独立评测结果归因 + 任务质检工具包（资产源自 Harbor 生态）
-> 状态：**as-built 架构快照（已实现）** | v4：2026-10-10（P014 后端收敛为 claude 单后端后重构；v3 为双后端快照，已废止）
+> 状态：**as-built 架构快照（已实现）** | v4：2026-10-10（P012 后端收敛为 claude 单后端后重构；v3 为双后端快照，已废止）
 
 ---
 
@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：CLI 三命令（analyze / check / clean）可用，127 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P014）：自研 general harness 已整体退役。
+**项目现状**：CLI 三命令（analyze / check / clean）可用，127 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。
 
 ---
 
@@ -22,7 +22,7 @@
 
 **血缘查证结论（2026-10-08，经 Harbor 上游核实）**：`analyze` 与 `check` 均为从 Harbor **vendored**（原样搬运）的能力（对应 Harbor 原生 `harbor task debug` 与 `harbor task check`），prompt/rubric 资产是 Harbor 生态的公共资产。因此 triage-kit 的解耦本质是**恢复这些资产的 Harbor-native 本来形态**（回归上游原始定位），而非移植改造。
 
-**目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（当前 Claude Agent SDK 单后端，通达 Anthropic 官方与 Anthropic 兼容端点如 DeepSeek；codex SDK / DeepSeek harness SDK 为规划中的后端），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（未来 triage-kit 自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 复原"完整链条。**项目核心价值在诊断 rubric 与 prompt 资产**——harness 管道交给专业 SDK 维护（P014 决策）。
+**目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（当前 Claude Agent SDK 单后端，通达 Anthropic 官方与 Anthropic 兼容端点如 DeepSeek；codex SDK / DeepSeek harness SDK 为规划中的后端），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（未来 triage-kit 自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 复原"完整链条。**项目核心价值在诊断 rubric 与 prompt 资产**——harness 管道交给专业 SDK 维护（P012 决策）。
 
 **核心设计哲学继承自上游原版**：把"判定标准"从 prompt 里抽出来变成数据（rubric），让输出 schema 随 rubric 动态生成，实现无改码的评测维度扩展。
 
@@ -33,15 +33,15 @@
 | 决策点 | 结论 | 状态 |
 |---|---|---|
 | 运行形态 | 独立 CLI + TRAE skill 双形态，共享资产单源维护 | CLI 已落地；skill 为 P001 |
-| 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；**claude harness 单后端**（Claude Agent SDK，原上游 backend.py 移植；工具循环/上下文/结构化输出全由 SDK 承担）；trae harness 规划为 skill 形态，**不作为 CLI 选项**；codex / DeepSeek harness SDK 为规划后端（P014） | 已落地 |
+| 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；**claude harness 单后端**（Claude Agent SDK，原上游 backend.py 移植；工具循环/上下文/结构化输出全由 SDK 承担）；trae harness 规划为 skill 形态，**不作为 CLI 选项**；codex / DeepSeek harness SDK 为规划后端（P012） | 已落地 |
 | Harbor 兼容 | 朴素 JSON 读取替代 TrialResult，原生支持（真实样本验证过字段布局，含 f2p/p2p/partial 细分透传） | 已落地 |
 | check 融合 | check 与 analyze 共享契约/schema 管线/两个 harness，引擎零新增——仅 `task_reader` + `checker` 编排 + `triage check` 子命令 | 已落地 |
 | check 文案 | check.txt 仅改首句的项目名（改为 "**a Harbor task**"）——恢复上游原貌，保持与 Harbor 资产可 diff 同步 | 已落地 |
 | 产物布局 | 全部落 `<dir>/triage-kit/` 子目录（analyze 与 check 同规则）：被评测目录零污染，`triage clean` 一条命令复原；不绑定任何上游 viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来自建，可自由采用新布局） | 已落地 |
 | 结构化输出 | claude harness 经 SDK 的 `output_format: json_schema` 机制（schema 由 rubric 动态编译注入）——SDK 原生强约束，无格式漂移风险 | 已落地 |
-| 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P015）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P015 待办 |
+| 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P013）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P013 待办 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
-| 多语言 | `--lang zh`：`analysis.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P011 路线 B）；`analysis.json` 恒英文；`analysis.zh.md` 退役 | 已落地 |
+| 多语言 | `--lang zh`：`analysis.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P009 路线 B）；`analysis.json` 恒英文；`analysis.zh.md` 退役 | 已落地 |
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
 | 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——待立项 | 部分实现 |
 | task 目录 | analyze 的降级路径按主路径设计（跨机器拷贝场景 task path 必然失效），支持 `--task-dir` 覆盖 | 已落地 |
@@ -210,7 +210,7 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
 
 **judge 禁读机制（防自引用锚定，2026-10-09 实证引入）**：`--force` 重跑时 judge 若能读到上一轮判定，独立性失效。现状：
 1. check 的 file_tree 渲染排除 `triage-kit/`（`render_file_tree(exclude=...)`）——check 侧已封堵
-2. **analyze 侧已知缺口（P015 立项待办）**：claude 后端将工具执行委托给 Agent SDK（`bypassPermissions`），CLI 的 Read/Glob/Grep 不经过本地沙箱，`triage-kit/` 旧产物对 judge 可见——候选方案是 CLI permissions deny 规则，Gate 1 时定稿
+2. **analyze 侧已知缺口（P013 立项待办）**：claude 后端将工具执行委托给 Agent SDK（`bypassPermissions`），CLI 的 Read/Glob/Grep 不经过本地沙箱，`triage-kit/` 旧产物对 judge 可见——候选方案是 CLI permissions deny 规则，Gate 1 时定稿
 
 `analysis.json` 内容示例：
 
@@ -301,19 +301,19 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **TDD**：全项目红-绿流程，测试先行（127 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
 - **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走实测 E2E（DeepSeek anthropic 兼容端点，含 113-trial 真实 job 复跑）
-- **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P014 的核心收益——自研 harness 的 P008/P009 缺陷类随 general 退役消失）
+- **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P012 的核心收益——自研 harness 的 forcing-400 / 工具异常两类缺陷随 general 退役消失，相关 dropped 条目文档已删除）
 
 ---
 
 ## 十一、边界与已知取舍
 
 - **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项（P004）
-- **analyze 侧 judge 禁读缺口**：judge 禁读机制（第七节）在 claude 路径上失效——CLI 工具不经本地沙箱，`triage-kit/` 旧产物对 judge 可见（P015 立项待办）
+- **analyze 侧 judge 禁读缺口**：judge 禁读机制（第七节）在 claude 路径上失效——CLI 工具不经本地沙箱，`triage-kit/` 旧产物对 judge 可见（P013 立项待办）
 - **并发无限流调度**：`-j/--jobs` 为固定线程数，无限流自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）；且 worker 为 CLI 子进程，`-j` 过高会吃满机器资源
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
 - **非 Anthropic 官方模型的 meta 缺失**：兼容端点（如 DeepSeek）不回填 token usage，`AgentMeta` 的 token 计数为 None、`analysis.meta.json` 无 token 统计（不影响判定与缓存身份，cost 由 CLI 回填）
-- **中文报告为翻译体**：（P011 已修复并升级为路线 B）曾为英文报告的逐句翻译（`analysis.zh.md` 双文件形态）；现 `--lang zh` 直接以中文原生撰写生成 `analysis.md`（判定与 JSON 一致、标识符保留英文，JSON 契约产物恒英文）
-- **运行日志不落盘**：执行日志仅输出控制台，事后 debug（judge 读了什么/哪一轮失败）无据可查——需随产物持久化到 `triage-kit/`（P013 立项待办）
+- **中文报告为翻译体**：（P009 已修复并升级为路线 B）曾为英文报告的逐句翻译（`analysis.zh.md` 双文件形态）；现 `--lang zh` 直接以中文原生撰写生成 `analysis.md`（判定与 JSON 一致、标识符保留英文，JSON 契约产物恒英文）
+- **运行日志不落盘**：执行日志仅输出控制台，事后 debug（judge 读了什么/哪一轮失败）无据可查——需随产物持久化到 `triage-kit/`（P011 立项待办）
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐
 - **task 目录跨机失效是主路径**：Linux 产出的 result.json 拷贝到 Windows 后 task path 必然不可解析，task_section 的降级话术（"infer from trajectory"）在跨机场景是常态而非边缘；DeepSWE 样本中 mini-swe-agent 轨迹内嵌完整任务 prompt，降级路径实测可用，但不具普遍性
 - **job 模式不透传 --task-dir**：一个 job 的多个 trial 可能来自不同任务，单一路径无法覆盖

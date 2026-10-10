@@ -1,4 +1,4 @@
-# P015 — Judge sandbox gap on the claude backend path
+# P013 — Judge sandbox gap on the claude backend path
 
 Status: **proposed** · Type: feature · Priority: medium
 
@@ -12,7 +12,7 @@ same trial). The claude backend uses the Claude Code CLI's own
 Read/Glob/Grep tools, which do not pass through our deny-list —
 `<trial>/triage-kit/` is visible to the judge. This gap previously
 existed as a known limitation (claude was a secondary backend); with
-P014 making claude the only backend, it becomes the primary path's
+P012 making claude the only backend, it becomes the primary path's
 gap.
 
 ## Goals
@@ -63,4 +63,4 @@ gap.
 
 ## Status & links
 
-- Proposed 2026-10-10. Supersedes the sandbox note retired with P014.
+- Proposed 2026-10-10. Supersedes the sandbox note retired with P012.

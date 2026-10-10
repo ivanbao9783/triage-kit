@@ -1,4 +1,4 @@
-# P010 — Single-item flows: verification + documentation
+# P008 — Single-item flows: verification + documentation
 
 Status: **proposed** · Type: docs · Priority: low
 

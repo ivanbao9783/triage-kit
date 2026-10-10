@@ -196,7 +196,7 @@ class Analyzer:
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "analysis.json", analysis)
         if self.lang == "zh":
-            # P011 route B: --lang zh composes the human-readable
+            # P009 route B: --lang zh composes the human-readable
             # report natively in Chinese directly as analysis.md (the
             # English JSON stays the contract artifact; analysis.zh.md
             # is retired).
@@ -286,7 +286,7 @@ class Analyzer:
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "analysis.json", result)
         if self.lang == "zh":
-            # P011 route B: the job report is composed natively in
+            # P009 route B: the job report is composed natively in
             # Chinese directly as analysis.md (see analyze_trial).
             self._compose_zh_report(
                 products_dir, _ZH_JOB_COMPOSE, "analysis.md", summary

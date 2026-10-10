@@ -1,4 +1,4 @@
-# P012 — Job aggregation summary quality
+# P010 — Job aggregation summary quality
 
 Status: **proposed** · Type: feature · Priority: medium
 

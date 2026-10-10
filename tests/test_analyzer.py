@@ -150,7 +150,7 @@ class TestAnalyzeTrial:
     def test_lang_zh_writes_native_md_per_trial_and_job(
         self, tmp_path, rubric
     ):
-        """P011 路线 B: --lang zh 时 analysis.md 即中文原生撰写版，
+        """P009 路线 B: --lang zh 时 analysis.md 即中文原生撰写版，
         analysis.zh.md 退役（不再产生）；JSON 契约产物恒英文。
         """
         from triage_kit.core.analyzer import Analyzer
@@ -195,7 +195,7 @@ class TestAnalyzeTrial:
         assert len(composes) == 3
 
     def test_lang_default_is_english_no_extra_calls(self, trial, rubric):
-        """Q3/P011: 默认英文——零 compose 调用，md 为机械渲染英文。"""
+        """Q3/P009: 默认英文——零 compose 调用，md 为机械渲染英文。"""
         from triage_kit.core.analyzer import Analyzer
 
         backend = make_backend(GOOD_RESPONSE)
@@ -501,7 +501,7 @@ class TestAnalyzeJob:
 
 
 class TestZhCompose:
-    """P011: --lang zh 二跳从「翻译」改为「中文原生撰写」。
+    """P009: --lang zh 二跳从「翻译」改为「中文原生撰写」。
 
     输入源 = 结构化 payload（trial 级 analysis.json 内容 / job 级
     summary 文本），不再喂英文 markdown；prompt 为中文写作指令 +
