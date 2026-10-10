@@ -1,6 +1,6 @@
 # P008 — Single-item flows: verification + documentation
 
-Status: **building** · Type: docs · Priority: low
+Status: **landed** · Type: docs · Priority: low
 
 ## Background & motivation
 
@@ -61,3 +61,9 @@ None — docs only.
   (both command forms + product expectations). Live verification of
   both flows is folded into the next unified E2E run (user decision:
   batch the live checks instead of per-feature runs).
+- Landed 2026-10-10: unified E2E verified both live flows —
+  `triage analyze details/<trial> --force --lang zh` (trial-level
+  products only, Chinese analysis.md, exit 0) and
+  `triage check deep-swe/tasks/<task>` (full 11-criteria
+  check-result.json, 10 pass / 1 fail / 1 not_applicable, exit 0).
+  No code changes needed — docs-only entry as planned.

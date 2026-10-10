@@ -1,6 +1,6 @@
 # P009 — Native Chinese reports (`--lang` selects `analysis.md` language)
 
-Status: **building** · Type: optimization · Priority: medium
+Status: **landed** · Type: optimization · Priority: medium
 Scope revision (2026-10-10, user decision): `analysis.zh.md` is retired;
 `--lang` now selects the language of `analysis.md` itself.
 
@@ -167,3 +167,10 @@ diverge on verdicts, breaking the zh/JSON consistency guarantee.
   Evidence: `details/triage-kit/analysis.zh.md` translationese
   observed in live E2E. Related: P010 (job summary quality —
   orthogonal).
+- Landed 2026-10-10: unified E2E (deepseek-flash) verified the
+  route-B shape on both levels — trial-level `analysis.md` natively
+  composed in Chinese (user-approved readability, 3-trial review +
+  the unified run), job-level `analysis.md` as `# 作业级分析`
+  composed from the job summary; cache hits (47/47) correctly skip
+  the compose hop per decision (i); stale `analysis.zh.md` files are
+  retired leftovers removable via `triage clean`.

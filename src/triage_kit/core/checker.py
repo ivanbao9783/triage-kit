@@ -6,6 +6,7 @@ but operates on task directories. Products land in
 tree clean of triage output.
 """
 
+import logging
 from pathlib import Path
 
 from triage_kit.core import cache
@@ -13,6 +14,8 @@ from triage_kit.core.assets import get_asset
 from triage_kit.core.rubric import Rubric, build_criteria_guidance
 from triage_kit.core.schema import build_check_response_schema
 from triage_kit.core.task_reader import render_file_tree, validate_task_dir
+
+logger = logging.getLogger(__name__)
 
 # File-tree guardrails (upstream parity + truncation): deep/large task trees must
 # not flood the prompt. Truncation is annotated so the model knows to explore
@@ -51,8 +54,12 @@ class Checker:
             schema=self._response_schema,
         )
         if cached is not None:
+            logger.info("cache hit: reusing cached check result")
             return cached
 
+        # P011 parity with the Analyzer: explicit start/finish markers
+        # so the persisted run.log carries a readable run trace.
+        logger.info("check start")
         errors = validate_task_dir(task_dir)
         if errors:
             raise ValueError(f"invalid task dir {task_dir}: {'; '.join(errors)}")
@@ -77,4 +84,5 @@ class Checker:
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "check-result.json", result)
         cache.write_json(products_dir / "check-result.meta.json", self._identity())
+        logger.info("check finished")
         return result

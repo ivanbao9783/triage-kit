@@ -1,6 +1,6 @@
 # P011 — Run log persistence under triage-kit/
 
-Status: **accepted** · Type: feature · Priority: medium
+Status: **landed** · Type: feature · Priority: medium
 
 ## Background & motivation
 
@@ -83,7 +83,19 @@ change (whole-directory removal already covers the log).
 ## Status & links
 
 - Proposed 2026-10-09. Gate 1 accepted 2026-10-10 (D1 unified
-  `run.log`, D2 overwrite, D3 file-always-DEBUG). Related: P003
-  (`[trial_name]` prefixes make persisted logs attributable); P013
-  (judge-visibility gap applies to the log the same as to existing
-  products).
+  `run.log`, D2 overwrite, D3 file-always-DEBUG). Landed 2026-10-10.
+- Verification results (2026-10-10, unified E2E, deepseek-flash):
+  - Single trial (`--force --lang zh`): run.log with 10 lines
+    including DEBUG-level SDK/asyncio records, turn/cost INFO lines
+    (21 turns, $0.32), and the analysis start/finish markers.
+  - Single task check: run.log with harness query records (12 turns,
+    $0.42). Gap noted during E2E and closed in the same entry: the
+    Checker had no start/finish markers (only the Analyzer did) —
+    added, plus an explicit cache-hit INFO log on both paths.
+  - Job mode (47 trials, `-j 8`): 55-line job-level run.log, 47/47
+    cache-hit records with `[trial_name]` prefixes, 0 real ERROR
+    lines (initial grep hits were trial names containing "error").
+  - Unit: 137 tests green (6 new RunLogPersistence contract tests).
+- Related: P003 (`[trial_name]` prefixes make persisted logs
+  attributable); P013 (judge-visibility gap applies to the log the
+  same as to existing products).
