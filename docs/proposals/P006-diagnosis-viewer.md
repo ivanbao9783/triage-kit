@@ -52,9 +52,10 @@ schemas are kept stable precisely so this viewer can read them
 **To be finalized when started** (Gate 1). Open questions: FastAPI +
 bundled frontend (bun build, like the upstream viewer) vs a
 zero-build static page reading a JSON bundle; heatmap scope (trials x
-criteria, as in the upstream viewer); whether `analysis.zh.md`
-toggling is UI-level; scanner reuse of `trial_reader`/`task_reader`
-primitives vs new module.
+criteria, as in the upstream viewer); report-language handling now
+that `analysis.md` language follows `--lang` and `analysis.zh.md` is
+retired (P009 route B); scanner reuse of
+`trial_reader`/`task_reader` primitives vs new module.
 
 ## Compatibility impact
 

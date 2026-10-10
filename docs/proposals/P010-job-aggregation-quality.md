@@ -15,8 +15,9 @@ P007).
 
 ## Goals
 
-- Job-level `analysis.md` / `analysis.zh.md` summaries that match the
-  user's expectations for actionable triage reporting on real jobs.
+- Job-level `analysis.md` summaries (language follows `--lang`, per
+  P009 route B; `analysis.zh.md` is retired) that match the user's
+  expectations for actionable triage reporting on real jobs.
 - The exact expectation set is captured at Gate 1 (see open
   questions) before any asset or code change.
 

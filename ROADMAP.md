@@ -24,3 +24,4 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P011 | Run log persistence under triage-kit/ | feature | medium | landed | [P011-run-log-persistence.md](docs/proposals/P011-run-log-persistence.md) |
 | P012 | Claude Agent SDK backend as the primary (and only) harness | refactor | high | landed | [P012-claude-backend-primary.md](docs/proposals/P012-claude-backend-primary.md) |
 | P013 | Judge sandbox gap on the claude backend path | feature | medium | proposed | [P013-judge-sandbox-claude-path.md](docs/proposals/P013-judge-sandbox-claude-path.md) |
+| P014 | check batch mode & human-readable products | feature | medium | proposed | [P014-check-batch-and-readable.md](docs/proposals/P014-check-batch-and-readable.md) |
