@@ -47,10 +47,11 @@ None — docs only.
 
 ## Verification plan
 
-- Run `triage analyze details/<one failing trial> --backend general
-  --model deepseek-flash --base-url https://api.deepseek.com` and one
-  `triage check deep-swe/tasks/<task>` against the live endpoint;
-  confirm products land correctly.
+- Run `triage analyze details/<one failing trial> --model
+  deepseek-flash` (with `ANTHROPIC_BASE_URL` pointed at DeepSeek's
+  Anthropic-compatible endpoint) and one `triage check
+  deep-swe/tasks/<task>` against the live endpoint; confirm products
+  land correctly.
 - README review against actual `--help` output.
 
 ## Status & links

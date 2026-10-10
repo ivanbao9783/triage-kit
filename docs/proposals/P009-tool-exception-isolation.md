@@ -1,6 +1,6 @@
 # P009 — Tool exception isolation in the general harness
 
-Status: **proposed** · Type: bugfix · Priority: medium
+Status: **dropped** · Type: bugfix · Priority: medium
 
 ## Background & motivation
 
@@ -73,3 +73,7 @@ catch-all.
 
 - Proposed 2026-10-09. Evidence: `e2e-113.log` (5 × glob
   NotImplementedError tracebacks through `tools.py:104`).
+- **Dropped 2026-10-10**: the defect carrier (general harness tools)
+  is retired by P014 — the claude backend uses the Claude Code CLI's
+  own Glob implementation, which handles absolute patterns. The 5
+  affected badcases are re-analyzed under P014's verification plan.

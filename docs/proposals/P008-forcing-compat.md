@@ -1,6 +1,6 @@
 # P008 — Forcing-path compatibility with reasoning endpoints
 
-Status: **proposed** · Type: bugfix · Priority: high
+Status: **dropped** · Type: bugfix · Priority: high
 
 ## Background & motivation
 
@@ -43,16 +43,41 @@ collects the trial into `failed_trials`, and no product is written.
 
 ## Design
 
-**To be finalized at Gate 1.** Candidate directions:
+**Finalized at Gate 1 (2026-10-10): hybrid — keep forced tool_choice,
+add a single 400-fallback with prompt nudge.**
 
-- (a) Prompt-based forcing: on the final turn, append a user-role
-  nudge ("call submit_analysis now with your best assessment") and
-  keep `tool_choice="auto"` — endpoint-agnostic.
-- (b) Reactive fallback: try forced `tool_choice` first; on a 400
-  that mentions tool_choice/thinking, retry once without it plus the
-  prompt nudge.
-- Open question: does (a) alone weaken submission discipline on
-  endpoints where tool_choice forcing works today?
+Rationale: in the 113-trial E2E, 16 of 47 analyzed trials (34%)
+reached the forcing turn — forced tool_choice does real work on
+struggling trials. Pure prompt-based forcing (option a) would regress
+submission discipline on permissive endpoints; pure retention (no
+fallback) keeps losing verdicts on thinking endpoints. The hybrid
+keeps the hard guarantee where the endpoint honors it and degrades
+gracefully where it does not.
+
+Mechanics (harness.py, final-turn block only):
+
+1. On the final turn, send the forced `tool_choice` request as today
+   (permissive endpoints: behavior unchanged).
+2. If that request raises an exception with
+   `status_code == 400` (via `getattr`, no SDK import), log a
+   WARNING and retry the same turn **once** with:
+   - an appended user-role nudge message:
+     "You have exhausted the tool-call turn budget. Do not call any
+     further tools. Call the submit_analysis tool NOW with your best
+     assessment based on the evidence gathered so far. If evidence is
+     incomplete, state that explicitly in the summary."
+   - `tool_choice="auto"`.
+3. Non-400 exceptions propagate unchanged; a second 400 propagates
+   (bounded — exactly one retry, no loop).
+4. No budget extension: if the retried turn still fails to submit
+   (text-only response, or a non-final tool call), the existing
+   error paths apply (`ended turn without calling` /
+   `did not call within N turns`).
+
+Detection note: matching on `status_code == 400` alone (not message
+text) — endpoint error phrasing is not stable across providers; a
+non-tool_choice 400 wastes one retry and then surfaces, which is
+acceptable.
 
 ## Compatibility impact
 
@@ -63,8 +88,14 @@ collects the trial into `failed_trials`, and no product is written.
 ## Verification plan
 
 - Unit: fake client raises 400 on non-auto tool_choice — assert the
-  trial still submits and produces a result.
-- Unit: forcing still forces on a permissive fake client.
+  trial still submits via the fallback path (nudge message present
+  in the retried request).
+- Unit: forcing still forces on a permissive fake client (forced
+  request observed, no nudge).
+- Unit: 400 on both attempts — the exception propagates (bounded
+  retry).
+- Unit: fallback turn responds text-only — `ended turn without
+  calling` ValueError (no budget extension).
 - Live: rerun the 16 affected trials from the `details` job (cache
   miss via `--force`); assert verdicts are produced.
 
@@ -72,3 +103,9 @@ collects the trial into `failed_trials`, and no product is written.
 
 - Proposed 2026-10-09. Evidence: `e2e-113.log` (46-trial run, 21
   failures, 16 × tool_choice 400).
+- **Dropped 2026-10-10**: the defect carrier (general harness) is
+  retired by P014 — the claude backend (Claude Agent SDK) has no
+  forced-tool_choice mechanism and was verified live against the same
+  DeepSeek thinking endpoint (E2E-lite, 16 autonomous turns, full
+  product set). The affected 16 badcases are re-analyzed under P014's
+  verification plan.

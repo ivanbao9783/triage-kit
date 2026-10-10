@@ -6,20 +6,22 @@ Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Ha
 - **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric)
 - **`triage clean`** — restore evaluated directories by removing all `triage-kit/` product directories (dry-run by default)
 
-triage-kit is an **independently runnable** toolkit that works with any OpenAI-compatible endpoint or the Claude Agent SDK. Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte). Design document: [docs/DESIGN.md](docs/DESIGN.md).
+triage-kit is an **independently runnable** toolkit powered by the Claude Agent SDK — reaching both Anthropic's own models and Anthropic-compatible endpoints (e.g. DeepSeek via `ANTHROPIC_BASE_URL`). Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte). Design document: [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quick start
 
 ```bash
 # 1. install (from the repo root)
-pip install -e ".[general]"  # OpenAI-compatible backends (GLM / DeepSeek ...)
+pip install -r requirements.txt   # or: pip install -e .
 
-# 2. provide credentials for your endpoint
-export OPENAI_API_KEY=...
+# 2. provide credentials
+export ANTHROPIC_API_KEY=sk-ant-...        # Anthropic official
+# — or, e.g. DeepSeek's Anthropic-compatible endpoint:
+# export ANTHROPIC_API_KEY=sk-...
+# export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 
 # 3. run over a Harbor job directory (failing trials only)
-triage analyze outputs/xxx/details --failing --backend general \
-    --model deepseek-flash --base-url https://api.deepseek.com
+triage analyze outputs/xxx/details --failing --model deepseek-flash
 
 # 4. inspect the products
 cat outputs/xxx/details/triage-kit/analysis.md   # overview (aggregated verdicts)
@@ -34,20 +36,18 @@ Add `--lang zh` to also get a Simplified-Chinese copy (`analysis.zh.md`) of ever
 For task quality inspection before running an evaluation:
 
 ```bash
-triage check path/to/tasks --backend general \
-    --model deepseek-flash --base-url https://api.deepseek.com
+triage check path/to/tasks --model deepseek-flash
 cat path/to/tasks/triage-kit/check-result.json
 ```
 
 ## Installation
 
 ```bash
-pip install -e ".[general]"   # OpenAI-compatible backends
-pip install -e ".[claude]"    # Claude Agent SDK backend
-pip install -e ".[dev]"       # run the test suite (pytest)
+pip install -r requirements.txt   # one-click: runtime + dev (pytest)
+pip install -e .                  # runtime only
 ```
 
-Requires Python 3.11+. The editable install keeps the `assets/` tree next to the package (see [docs/DESIGN.md](docs/DESIGN.md) for the packaging boundary).
+Requires Python 3.11+. The claude-agent-sdk dependency bundles the Claude Code CLI, so no separate Node/npm install is needed. The editable install keeps the `assets/` tree next to the package (see [docs/DESIGN.md](docs/DESIGN.md) for the packaging boundary).
 
 ## CLI reference
 
@@ -58,9 +58,8 @@ Requires Python 3.11+. The editable install keeps the `assets/` tree next to the
 | `--failing` | Job mode: analyze failing trials only |
 | `--task-dir <path>` | Task directory override (the recorded task path may not exist on this machine) |
 | `--rubric <file>` | Custom rubric file (default: `assets/analyze/analyze-rubric.toml`) |
-| `--backend general\|claude` | Backend selection (default: `general`) |
-| `-m, --model <name>` | Model name — **required for `general`** |
-| `--base-url <url>` | OpenAI-compatible endpoint override — `general` only |
+| `--backend claude` | Backend selection (default: `claude`; more backends planned) |
+| `-m, --model <name>` | Model name (default: `haiku`; pass e.g. `deepseek-flash` when using `ANTHROPIC_BASE_URL`) |
 | `-f, --force` | Re-analyze even if cached `triage-kit/analysis.json` exists (overwrites) |
 | `--lang en\|zh` | Product language (default: `en`); `zh` adds a translated `analysis.zh.md` |
 | `-j, --jobs <n>` | Concurrent trial analyses in job mode (default: `1` = sequential; single-trial analysis is never pooled) |
@@ -81,9 +80,8 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 | Option | Description |
 |---|---|
 | `-r, --rubric <file\|family>` | Rubric file path or family name (default: `check-default`) |
-| `--backend general\|claude` | Backend selection (default: `general`) |
-| `-m, --model <name>` | Model name — **required for `general`** |
-| `--base-url <url>` | OpenAI-compatible endpoint override — `general` only |
+| `--backend claude` | Backend selection (default: `claude`; more backends planned) |
+| `-m, --model <name>` | Model name (default: `sonnet`; pass e.g. `deepseek-flash` when using `ANTHROPIC_BASE_URL`) |
 | `-f, --force` | Re-check even if cached `triage-kit/check-result.json` exists (overwrites) |
 | `-v, --verbose` | Debug logging |
 
@@ -99,19 +97,22 @@ Restores evaluated directories to their pre-triage state: recursively finds and 
 
 ### Backends
 
-**general** — self-built read-only tool loop (`read_file` / `glob` / `grep` + final-tool submission) over any OpenAI-compatible endpoint. `-m/--model` is required (no sane default across endpoints). `--base-url` overrides the endpoint; the target host is auto-exempted from system proxies.
-
-**claude** — Claude Agent SDK, retained as the reference implementation:
+**claude** — the Claude Agent SDK backend (the tool loop, context management, and structured-output extraction all run inside the SDK's bundled Claude Code CLI). Endpoint override is via `ANTHROPIC_BASE_URL` — Anthropic-compatible endpoints work directly:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 triage analyze path/to/trial     # defaults to -m haiku
 triage check path/to/task        # defaults to -m sonnet
+
+# e.g. DeepSeek's Anthropic-compatible endpoint
+export ANTHROPIC_API_KEY=sk-...
+export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+triage analyze path/to/job --failing -m deepseek-flash -j 8
 ```
 
-`--base-url` is rejected for this backend (set `ANTHROPIC_BASE_URL` instead).
+More backends (codex SDK, DeepSeek harness SDK) are planned; they will join `--backend` (see [Roadmap](#roadmap)).
 
-**trae** — the hosting agent itself is the tool loop; a SKILL.md asset pack is on the roadmap (see [Roadmap](#roadmap)).
+**trae** — the hosting agent itself is the tool loop; a SKILL.md asset pack is on the roadmap.
 
 ### Caching
 
@@ -121,7 +122,7 @@ Both commands reuse cached products by default. A cache hit requires an identity
 
 Task/trial files are read as plain JSON in the Harbor-native layout (trial directories with `result.json`, task directories with `task.toml`), so results produced by standard Harbor jobs work out of the box.
 
-The judge never sees its own prior verdicts: the `triage-kit/` products directory is excluded from the check file tree, and in the **general** backend the `read_file`/`glob`/`grep` sandbox deny-lists it — so a `--force` rerun is an independent re-judgment. (The **claude** backend delegates tool execution to the Claude Agent SDK, which has no such deny-list.)
+The judge never sees its own prior verdicts on the check path: the `triage-kit/` products directory is excluded from the check file tree, so a `--force` re-check is an independent re-judgment. (On the analyze path the claude backend delegates tool execution to the SDK's CLI, which currently has no such deny-list — a known gap tracked as P015 in the roadmap.)
 
 Judgment criteria live in data (TOML rubrics); output schemas are generated dynamically from them — extending evaluation dimensions requires zero code changes:
 
@@ -150,8 +151,8 @@ pre-development gate.
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest                    # 170 tests, no network access needed
+pip install -r requirements.txt
+pytest                    # 127 tests, no network access needed
 ```
 
 ## License

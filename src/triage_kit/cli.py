@@ -1,9 +1,10 @@
 """triage CLI: `triage analyze` (badcase attribution) + `triage check`
 (task quality inspection).
 
-Backend selection is limited to 'general' (any OpenAI-compatible endpoint)
-and 'claude' (Claude Agent SDK). The trae harness is a skill form, not a
-CLI option.
+Backend selection: 'claude' (Claude Agent SDK — also reaches
+Anthropic-compatible endpoints such as DeepSeek via ANTHROPIC_BASE_URL).
+Future backends (codex SDK, DeepSeek harness SDK) will join --backend.
+The trae harness is a skill form, not a CLI option.
 """
 
 import logging
@@ -24,53 +25,13 @@ app = typer.Typer(
 logger = logging.getLogger(__name__)
 
 
-def _open_general_backend(model: str | None, base_url: str | None):
-    from openai import OpenAI
-
-    from triage_kit.backends.general.harness import GeneralHarness
-
-    client = OpenAI(base_url=base_url) if base_url else OpenAI()
-    return GeneralHarness(client, default_model=model)
-
-
-def _exempt_from_system_proxy(base_url: str) -> None:
-    """Ensure an explicitly targeted endpoint bypasses system proxies.
-
-    httpx reads Windows registry proxies but ignores the WinINET bypass
-    list, so a localhost/intranet endpoint would be routed through the
-    system proxy (and fail). NO_PROXY is the cross-platform exemption
-    channel httpx does honor.
-    """
-    import os
-    from urllib.parse import urlparse
-
-    host = urlparse(base_url).hostname
-    if not host:
-        return
-    current = os.environ.get("NO_PROXY", "")
-    if host not in current.split(","):
-        os.environ["NO_PROXY"] = f"{current},{host}".lstrip(",")
-
-
-def build_backend(name: str, model: str | None, base_url: str | None = None):
+def build_backend(name: str, model: str | None):
     """Map a backend name to a harness satisfying the AgentBackend contract."""
-    if name == "general":
-        if base_url:
-            _exempt_from_system_proxy(base_url)
-        return _open_general_backend(model, base_url)
     if name == "claude":
-        if base_url:
-            raise ValueError(
-                "--base-url only applies to --backend general; the claude "
-                "backend manages its own endpoint (set ANTHROPIC_BASE_URL "
-                "to override it)"
-            )
         from triage_kit.backends.claude.harness import ClaudeHarness
 
         return ClaudeHarness(default_model=model)
-    raise ValueError(
-        f"unknown backend {name!r} (expected 'general' or 'claude')"
-    )
+    raise ValueError(f"unknown backend {name!r} (expected 'claude')")
 
 
 def _resolve_check_rubric(value: str | None) -> Path:
@@ -91,16 +52,15 @@ def _resolve_check_rubric(value: str | None) -> Path:
     )
 
 
-# Upstream-compatible claude defaults; general has no sane cross-endpoint default
-# so -m is mandatory there (a literal "default" in AgentMeta would be a lie).
+# Upstream-compatible claude defaults (haiku for analyze, sonnet for
+# check); non-Anthropic endpoints pass -m explicitly (e.g.
+# deepseek-flash via ANTHROPIC_BASE_URL).
 _DEFAULT_MODEL = {"claude": {"analyze": "haiku", "check": "sonnet"}}
 
 
 def _resolve_model(backend: str, command: str, model: str | None) -> str:
     if model is not None:
         return model
-    if backend == "general":
-        _fail("--model/-m is required for --backend general")
     return _DEFAULT_MODEL[backend][command]
 
 
@@ -122,13 +82,12 @@ def analyze(
         None, "--rubric", help="Rubric file (default: analyze-rubric.toml)."
     ),
     backend: str = typer.Option(
-        "general", "--backend", help="general | claude."
+        "claude", "--backend", help="Agent harness backend (claude)."
     ),
     model: str = typer.Option(
-        None, "--model", "-m", help="Model name for the chosen backend."
-    ),
-    base_url: str = typer.Option(
-        None, "--base-url", help="OpenAI-compatible endpoint override."
+        None, "--model", "-m",
+        help="Model name (claude backend default: haiku; pass e.g. "
+             "deepseek-flash when using ANTHROPIC_BASE_URL).",
     ),
     force: bool = typer.Option(
         False, "--force", "-f",
@@ -170,7 +129,7 @@ def analyze(
             Path(rubric) if rubric is not None
             else get_asset("analyze/analyze-rubric.toml")
         )
-        harness = build_backend(backend, effective_model, base_url)
+        harness = build_backend(backend, effective_model)
         analyzer = Analyzer(
             backend=harness,
             rubric=load_rubric(rubric_path),
@@ -198,13 +157,12 @@ def check(
         help="Rubric file path or family name (default: check-default).",
     ),
     backend: str = typer.Option(
-        "general", "--backend", help="general | claude."
+        "claude", "--backend", help="Agent harness backend (claude)."
     ),
     model: str = typer.Option(
-        None, "--model", "-m", help="Model name for the chosen backend."
-    ),
-    base_url: str = typer.Option(
-        None, "--base-url", help="OpenAI-compatible endpoint override."
+        None, "--model", "-m",
+        help="Model name (claude backend default: sonnet; pass e.g. "
+             "deepseek-flash when using ANTHROPIC_BASE_URL).",
     ),
     force: bool = typer.Option(
         False, "--force", "-f",
@@ -226,7 +184,7 @@ def check(
     try:
         effective_model = _resolve_model(backend, "check", model)
         rubric_path = _resolve_check_rubric(rubric)
-        harness = build_backend(backend, effective_model, base_url)
+        harness = build_backend(backend, effective_model)
         checker = Checker(
             backend=harness,
             rubric=load_rubric(rubric_path),

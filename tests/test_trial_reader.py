@@ -43,21 +43,35 @@ class TestDirClassification:
 
 class TestListTrials:
     @needs_sample
-    def test_finds_both_sample_trials(self):
-        from triage_kit.core.trial_reader import list_trials
+    def test_lists_sample_trials(self):
+        """Sample-content-insensitive: shape assertions plus the two
+        trials the sample has carried since the 2-trial era."""
+        from triage_kit.core.trial_reader import is_trial_dir, list_trials
 
         trials = list_trials(SAMPLE_JOB)
         names = {t.name for t in trials}
-        assert names == {
-            "ts-pattern-match-each__9giF4pL",
-            "tomlkit-toml-table-converters__BVG4s9W",
-        }
+        assert {"ts-pattern-match-each__9giF4pL",
+                "tomlkit-toml-table-converters__BVG4s9W"} <= names
+        assert all(is_trial_dir(t) for t in trials)
 
     @needs_sample
-    def test_failing_only_empty_for_passing_samples(self):
+    def test_failing_only_returns_non_passing_subset(self):
+        """Every failing entry is genuinely non-passing (reward != 1 or
+        exception recorded); the sample mixes passing and failing."""
         from triage_kit.core.trial_reader import list_trials
 
-        assert list_trials(SAMPLE_JOB, failing_only=True) == []
+        trials = list_trials(SAMPLE_JOB)
+        failing = list_trials(SAMPLE_JOB, failing_only=True)
+        assert 0 < len(failing) < len(trials)
+        assert {t.name for t in failing} < {t.name for t in trials}
+        for t in failing:
+            result = json.loads(
+                (t / "result.json").read_text(encoding="utf-8")
+            )
+            reward = (
+                (result.get("verifier_result") or {}).get("rewards") or {}
+            ).get("reward")
+            assert reward != 1 or result.get("exception_info") is not None
 
     def test_failing_only_keeps_failed_and_exception(self, tmp_path):
         from triage_kit.core.trial_reader import list_trials

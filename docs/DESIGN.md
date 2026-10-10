@@ -1,7 +1,7 @@
 # triage-kit 设计文档
 
 > 从 Harbor 生态评测工具链解耦的独立评测结果归因 + 任务质检工具包（资产源自 Harbor 生态）
-> 状态：**as-built 架构快照（已实现）** | v3：2026-10-09（对照代码全量核验后重构；v2 为实现前方案稿，已废止）
+> 状态：**as-built 架构快照（已实现）** | v4：2026-10-10（P014 后端收敛为 claude 单后端后重构；v3 为双后端快照，已废止）
 
 ---
 
@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：MVP（M1–M7b）已全部落地——CLI 三命令（analyze / check / clean）可用，170 项测试全绿，真实 LLM 端点（DeepSeek）E2E 验证通过，产物布局经真实样本实测。
+**项目现状**：CLI 三命令（analyze / check / clean）可用，127 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P014）：自研 general harness 已整体退役。
 
 ---
 
@@ -22,7 +22,7 @@
 
 **血缘查证结论（2026-10-08，经 Harbor 上游核实）**：`analyze` 与 `check` 均为从 Harbor **vendored**（原样搬运）的能力（对应 Harbor 原生 `harbor task debug` 与 `harbor task check`），prompt/rubric 资产是 Harbor 生态的公共资产。因此 triage-kit 的解耦本质是**恢复这些资产的 Harbor-native 本来形态**（回归上游原始定位），而非移植改造。
 
-**目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（general harness 挂任意 OpenAI-compatible LLM），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（未来 triage-kit 自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 复原"完整链条。
+**目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（当前 Claude Agent SDK 单后端，通达 Anthropic 官方与 Anthropic 兼容端点如 DeepSeek；codex SDK / DeepSeek harness SDK 为规划中的后端），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（未来 triage-kit 自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 复原"完整链条。**项目核心价值在诊断 rubric 与 prompt 资产**——harness 管道交给专业 SDK 维护（P014 决策）。
 
 **核心设计哲学继承自上游原版**：把"判定标准"从 prompt 里抽出来变成数据（rubric），让输出 schema 随 rubric 动态生成，实现无改码的评测维度扩展。
 
@@ -33,13 +33,13 @@
 | 决策点 | 结论 | 状态 |
 |---|---|---|
 | 运行形态 | 独立 CLI + TRAE skill 双形态，共享资产单源维护 | CLI 已落地；skill 为 P001 |
-| 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；general harness（自研循环挂任意 OpenAI-compatible）+ claude harness（参照实现）；trae harness 规划为 skill 形态，**不作为 CLI 选项** | 已落地 |
+| 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；**claude harness 单后端**（Claude Agent SDK，原上游 backend.py 移植；工具循环/上下文/结构化输出全由 SDK 承担）；trae harness 规划为 skill 形态，**不作为 CLI 选项**；codex / DeepSeek harness SDK 为规划后端（P014） | 已落地 |
 | Harbor 兼容 | 朴素 JSON 读取替代 TrialResult，原生支持（真实样本验证过字段布局，含 f2p/p2p/partial 细分透传） | 已落地 |
 | check 融合 | check 与 analyze 共享契约/schema 管线/两个 harness，引擎零新增——仅 `task_reader` + `checker` 编排 + `triage check` 子命令 | 已落地 |
 | check 文案 | check.txt 仅改首句的项目名（改为 "**a Harbor task**"）——恢复上游原貌，保持与 Harbor 资产可 diff 同步 | 已落地 |
 | 产物布局 | 全部落 `<dir>/triage-kit/` 子目录（analyze 与 check 同规则）：被评测目录零污染，`triage clean` 一条命令复原；不绑定任何上游 viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来自建，可自由采用新布局） | 已落地 |
-| 结构化输出 | general harness 用 final-tool 技巧（`submit_analysis` 强制调用，tool calling 参数校验兜底），实现在 `harness.py` 内部，无独立模块 | 已落地 |
-| 安全与预算 | `tools.py` 路径沙箱（cwd∪add_dirs 白名单 + `triage-kit/` 禁读）+ max_turns + 工具输出截断 | 已落地 |
+| 结构化输出 | claude harness 经 SDK 的 `output_format: json_schema` 机制（schema 由 rubric 动态编译注入）——SDK 原生强约束，无格式漂移风险 | 已落地 |
+| 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P015）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P015 待办 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
 | 多语言 | `--lang zh` 追加翻译二跳生成 `analysis.zh.md`，英文产物不动 | 已落地 |
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
@@ -49,18 +49,21 @@
 
 ---
 
-## 四、架构：契约 + 三实现
+## 四、架构：契约 + 单实现（多后端可插拔）
 
 ```
 Agent 契约（唯一的接口层）
   query_agent(prompt, cwd, tools, add_dirs, output_schema) -> (result, meta)
         │
-        ├── general harness ── 自研工具循环，挂任意 OpenAI-compatible LLM
-        │       （模型 = 参数，换 GLM/DeepSeek/Qwen/中转只改环境变量）
+        ├── claude harness ── 主实现：Claude Agent SDK（原上游 backend.py 移植）
+        │       工具循环/上下文管理/结构化输出全由 SDK 内置 CLI 承担；
+        │       端点 = ANTHROPIC_BASE_URL（Anthropic 官方 / DeepSeek 等
+        │       Anthropic 兼容端点），模型 = 参数（-m）
         │
         ├── trae harness ──── 规划形态：循环由 TRAE 宿主提供，SKILL.md 是资产包（P001）
         │
-        └── claude harness ── 参照实现：原上游 backend.py 移植，几乎原样
+        ├── codex harness ─── 规划（用户已排期意向，未立项）
+        └── deepseek harness ── 规划（DeepSeek 原生 SDK，未立项）
 ```
 
 **关键分界线**：
@@ -111,23 +114,20 @@ triage-kit/
 │   │   └── checker.py               check 编排：file_tree 渲染（排除 triage-kit/）→单次调用→校验→落盘
 │   │
 │   ├── backends/                    ← 【实现层】
-│   │   ├── general/
-│   │   │   ├── harness.py           循环主体 + final-tool 结构化输出（submit_analysis schema 生成 + 强制调用）
-│   │   │   └── tools.py             read_file / glob / grep 三工具 + PathSandbox（白名单 + triage-kit/ 禁读）
 │   │   ├── claude/
-│   │   │   └── harness.py           参照实现：原上游 backend.py 去框架 import（Read/Glob/Grep via Agent SDK）
+│   │   │   └── harness.py           主实现：原上游 backend.py 去框架 import（Read/Glob/Grep + output_format via Agent SDK）
 │   │   └── trae/                    占位（`__init__.py`）；SKILL.md 资产包为 P001
 │   │
 │   └── cli.py                       入口：triage analyze / check / clean
 │
-├── tests/                           ← pytest，170 项；conftest.py 集中共享工厂/常量/FakeBackend
+├── tests/                           ← pytest，127 项；conftest.py 集中共享工厂/常量/FakeBackend
 ├── docs/
 │   ├── DESIGN.md                    本文档
 │   └── proposals/                   特性设计文档（P000 流程）
 ├── ROADMAP.md                       跟踪索引（单一事实源）
-├── scripts/e2e_mock_endpoint.py     独立 E2E 演练脚本（mock 端点 + 全流程断言）
+├── requirements.txt                 一键安装入口（-e .[dev]；依赖事实源在 pyproject）
 ├── NOTICE                           Harbor Apache 2.0 血缘致谢
-└── pyproject.toml                   依赖仅: pydantic + typer + openai (+ claude_agent_sdk 可选)
+└── pyproject.toml                   依赖: pydantic + pyyaml + typer + claude-agent-sdk（硬依赖，SDK 自带 CLI）
 ```
 
 五份 prompt/rubric 资产（analyze 系列 3 + check 系列 2）**逐字节冻结**于上游原版（`tests/test_assets.py` 以 sha256 快照守卫），保证资产溯源与对上游 diff 的可同步性；`KNOWN-ISSUES.md` 与未来家族 rubric 不在冻结范围。
@@ -139,14 +139,18 @@ triage-kit/
 ### 实际命令形态（全部经 `--help` 与 E2E 核验）
 
 ```bash
-# 单 trial 归因
-triage analyze <trial_dir> --backend general --model <name> --base-url <url>
+# 单 trial 归因（Anthropic 官方端点，模型默认 haiku）
+triage analyze <trial_dir>
+
+# DeepSeek 等 Anthropic 兼容端点（环境变量指端点 + -m 指模型）
+export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
+triage analyze <trial_dir> -m deepseek-flash
 
 # job 级批量归因（--failing 只筛 badcase；空集时零 LLM 调用短路退出）
-triage analyze <job_dir> --failing --backend general --model <name> --base-url <url>
+triage analyze <job_dir> --failing -m deepseek-flash
 
-# 中文产物（英文产物不动，追加 triage-kit/analysis.zh.md）
-triage analyze <trial_or_job_dir> --lang zh ...
+# 并发（-j）+ 中文产物（--lang zh，英文产物不动，追加 analysis.zh.md）
+triage analyze <job_dir> --failing -m deepseek-flash -j 8 --lang zh
 
 # 跨机器拷贝场景：手动覆盖 task 目录位置
 triage analyze <trial_dir> --task-dir /local/path/to/task
@@ -154,12 +158,8 @@ triage analyze <trial_dir> --task-dir /local/path/to/task
 # 自定义判定标准（analyze 侧接受 rubric 文件路径）
 triage analyze <trial_dir> --rubric my-rubric.toml
 
-# Claude 参照实现（模型默认 haiku/analyze、sonnet/check，无需 -m）
-triage analyze <trial_dir> --backend claude
-triage check <task_dir> --backend claude
-
 # 任务质量检查（check 侧 -r 接受文件路径或家族名；家族文件当前仅有 default）
-triage check <task_dir>                       # 默认 check-default.toml
+triage check <task_dir>                       # 默认 check-default.toml，模型默认 sonnet
 triage check <task_dir> -r deep-swe           # 家族名解析 → assets/check/rubrics/check-deep-swe.toml（P002）
 
 # 复原：递归删除 triage-kit/ 产物目录（默认 dry-run，--yes 才真删；锁定目录点名跳过，其余照删）
@@ -167,14 +167,13 @@ triage clean <job_dir>                        # 预览
 triage clean <job_dir> --yes                   # 实际删除，原生评测数据零损伤
 ```
 
-各命令通用：`--force/-f` 绕过缓存重跑；`--verbose/-v` 开 DEBUG 日志（general harness 记录完整工具调用序列，可审计"judge 看了什么证据"）。
+各命令通用：`--force/-f` 绕过缓存重跑；`--verbose/-v` 开 DEBUG 日志（`[trial_name]` 前缀归因并发下的日志行）。
 
-**并发说明**（P003）：`triage analyze` 的 job 模式支持 `-j/--jobs <n>` 有界并发（`ThreadPoolExecutor(max_workers=n)` 包裹逐 trial 分析，默认 `-j 1` 保持串行行为）。产物顺序钉在目录序上，对 `j` 不变；并发下日志带 `[trial_name]` 前缀可归因；单 trial 失败不毒化兄弟（计入 `failed_trials` 并打 ERROR 行）。429 限流由用户自行调低 `-j` 应对（无自动限流调度）。
+**并发说明**（P003）：`triage analyze` 的 job 模式支持 `-j/--jobs <n>` 有界并发（`ThreadPoolExecutor(max_workers=n)` 包裹逐 trial 分析，默认 `-j 1` 保持串行行为）。产物顺序钉在目录序上，对 `j` 不变；并发下日志带 `[trial_name]` 前缀可归因；单 trial 失败不毒化兄弟（计入 `failed_trials` 并打 ERROR 行）。注意 worker 是 SDK CLI 子进程（每 trial 一个），`-j` 取值需兼顾机器资源。限流由用户自行调低 `-j` 应对（无自动限流调度）。
 
 **环境变量**：
-- `OPENAI_API_KEY`（general harness 凭证；端点也可用 `OPENAI_BASE_URL` 环境变量替代 `--base-url`）
-- `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL`（claude 后端；claude 不接受 `--base-url` 选项）
-- `NO_PROXY`：`--base-url` 指向 localhost/内网端点时，CLI 自动补写以豁免系统代理（httpx 读 Windows 注册表代理但无视 WinINET bypass 列表的兼容层）
+- `ANTHROPIC_API_KEY`（凭证，Anthropic 官方或兼容端点的 key）
+- `ANTHROPIC_BASE_URL`（端点覆盖：Anthropic 官方为默认值；DeepSeek 等兼容端点设为其 anthropic 兼容地址）
 
 ### TRAE skill 形态（P001，未实现）
 
@@ -211,10 +210,9 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
 - 单 trial 失败不中断 job：进 `failed_trials` 聚合后继续
 - 缓存命中路径不会自动补齐新版式产物（升级功能后需 `--force` 或手动补齐）
 
-**judge 禁读机制（防自引用锚定，2026-10-09 实证引入）**：`--force` 重跑时 judge 若能读到上一轮判定，独立性失效。三层封堵：
-1. check 的 file_tree 渲染排除 `triage-kit/`（`render_file_tree(exclude=...)`）
-2. general harness 工具沙箱把 `triage-kit/` 列入 deny-list：`read_file`/`grep` 显式路径 → `PermissionError`（附原因说明）；`glob`/`grep` 遍历结果静默排除——对所有 root（cwd + add_dirs）生效
-3. **已知缺口**：claude 后端将工具执行委托给 Agent SDK（`bypassPermissions`），不经过我们的沙箱，理论上仍可读到旧产物——待立项处理
+**judge 禁读机制（防自引用锚定，2026-10-09 实证引入）**：`--force` 重跑时 judge 若能读到上一轮判定，独立性失效。现状：
+1. check 的 file_tree 渲染排除 `triage-kit/`（`render_file_tree(exclude=...)`）——check 侧已封堵
+2. **analyze 侧已知缺口（P015 立项待办）**：claude 后端将工具执行委托给 Agent SDK（`bypassPermissions`），CLI 的 Read/Glob/Grep 不经过本地沙箱，`triage-kit/` 旧产物对 judge 可见——候选方案是 CLI permissions deny 规则，Gate 1 时定稿
 
 `analysis.json` 内容示例：
 
@@ -249,7 +247,7 @@ judge 的响应 trial_name 必须与 trial 目录名一致，不一致按失败�
 用户触发 → trial_reader 朴素读 result.json（筛 badcase / 判定 trial vs job 目录）
         → analyzer 渲染 prompt（assets 模板 + rubric 编译产物 guidance/schema；
           task 目录可用时挂为 add_dir，不可用时注入降级话术——跨机器拷贝场景这是主路径）
-        → backend（general/claude）执行 agent 循环，返回 (result, meta)
+        → backend（claude harness）执行 agent 循环，返回 (result, meta)
         → schema 校验（trial_name 一致性 + 空值拒绝）→ analysis.json/md/meta 落盘 triage-kit/ 子目录
           （--lang zh 时追加翻译二跳：一次纯 LLM query 调用，写 analysis.zh.md）
         → job 模式：所有 trial 经有界线程池（-j/--jobs，默认 1=串行 FIFO）→ join 后按目录序折叠
@@ -299,23 +297,20 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十、工程质量机制
 
-- **TDD**：全项目红-绿流程，测试先行（170 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
+- **TDD**：全项目红-绿流程，测试先行（127 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
-- **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走独立 E2E 脚本（`scripts/e2e_mock_endpoint.py`，mock 端点全流程断言）
-- **工具预算与截断**（general harness）：read_file 单文件 10MB / 2000 行 / 每行 2000 字符三重上限（附截断标记），glob 200 条上限，grep 200 匹配上限，max_turns 默认 15
-- **可审计性**：`--verbose` 下 general harness 记录 judge 完整工具调用序列；stdout 输出 meta 摘要（n_turns / tokens）
+- **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走实测 E2E（DeepSeek anthropic 兼容端点，含 113-trial 真实 job 复跑）
+- **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P014 的核心收益——自研 harness 的 P008/P009 缺陷类随 general 退役消失）
 
 ---
 
 ## 十一、边界与已知取舍
 
-- **失去 SDK 级 structured output 强约束**（general harness）：靠 final-tool 的 tool calling 参数校验兜底，格式漂移风险可控但非零
-- **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项
-- **claude 后端禁读缺口**：judge 禁读机制（第七节）仅覆盖 general 后端；claude 委托 Agent SDK 执行工具（`bypassPermissions`），不经过本地沙箱。待立项
-- **并发无限流调度**：`-j/--jobs` 为固定线程数，无 429 自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）
+- **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项（P004）
+- **analyze 侧 judge 禁读缺口**：judge 禁读机制（第七节）在 claude 路径上失效——CLI 工具不经本地沙箱，`triage-kit/` 旧产物对 judge 可见（P015 立项待办）
+- **并发无限流调度**：`-j/--jobs` 为固定线程数，无限流自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）；且 worker 为 CLI 子进程，`-j` 过高会吃满机器资源
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
-- **forcing 路径与推理端点不兼容**：turn 预算耗尽时 harness 以 `tool_choice` 强制提交，DeepSeek 思考模式端点拒绝该参数直接 400——实测 46 个 badcase 中 16 个因此丢失判定（P008 立项待办）
-- **工具异常未隔离**：general harness 的工具分发点无异常边界，模型传错参数（如 glob 绝对路径 pattern）即炸掉整个 trial——实测 5 个 badcase 因此丢失判定；read_file/grep 已有 Error 字符串约定，glob 缺守卫（P009 立项待办）
+- **非 Anthropic 官方模型的 meta 缺失**：兼容端点（如 DeepSeek）不回填 token usage，`AgentMeta` 的 token 计数为 None、`analysis.meta.json` 无 token 统计（不影响判定与缓存身份，cost 由 CLI 回填）
 - **中文报告为翻译体**：`--lang zh` 的第二跳是英文报告的翻译（analyzer 内联 prompt），产出翻译腔中文，可读性差——需改为中文原生撰写（P011 立项待办）
 - **运行日志不落盘**：执行日志仅输出控制台，事后 debug（judge 读了什么/哪一轮失败）无据可查——需随产物持久化到 `triage-kit/`（P013 立项待办）
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐

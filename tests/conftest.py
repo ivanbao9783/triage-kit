@@ -8,7 +8,6 @@ a factory library for other tests.
 import hashlib
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ANALYZE_RUBRIC = REPO_ROOT / "assets" / "analyze" / "analyze-rubric.toml"
@@ -118,38 +117,3 @@ def make_barrier_backend(parties: int, response: dict):
             return "JOB SUMMARY", AgentMeta(n_turns=0, model=model)
 
     return FakeBackend()
-
-
-# ---------- OpenAI-compatible client fakes ----------
-
-SUBMIT_RESULT = {"trial_name": "t", "summary": "s", "answer": 42}
-
-
-class FakeClient:
-    """Mimics openai.OpenAI's chat.completions surface, scripted per call."""
-
-    def __init__(self, responses: list):
-        self.responses = list(responses)
-        self.calls: list[dict] = []
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=self._create)
-        )
-
-    def _create(self, **kwargs):
-        self.calls.append(kwargs)
-        return self.responses.pop(0)
-
-
-def tool_call(call_id: str, name: str, arguments: dict):
-    return SimpleNamespace(
-        id=call_id,
-        function=SimpleNamespace(name=name, arguments=json.dumps(arguments)),
-    )
-
-
-def response(tool_calls=None, content=None, p=10, c=5):
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
-    usage = SimpleNamespace(prompt_tokens=p, completion_tokens=c)
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=message)], usage=usage
-    )

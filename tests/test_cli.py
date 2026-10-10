@@ -2,7 +2,7 @@
 
 The backend factory (build_backend) is monkeypatched with a FakeBackend, so
 CLI wiring — path dispatch, option plumbing, product placement — is tested
-without typer's app depending on openai/claude SDKs being installed.
+without typer's app depending on the claude SDK being installed.
 """
 
 import json
@@ -14,21 +14,6 @@ from typer.testing import CliRunner
 from tests.conftest import make_task, make_trial
 
 runner = CliRunner()
-
-
-def _patch_openai_with_fake(monkeypatch):
-    """Swap sys.modules['openai'] for a capture stub; returns captured kwargs."""
-    import sys
-
-    captured = {}
-
-    class FakeOpenAI:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-    monkeypatch.setitem(sys.modules, "openai", type(sys)("openai"))
-    sys.modules["openai"].OpenAI = FakeOpenAI
-    return captured
 
 
 def make_fake_backend():
@@ -292,37 +277,13 @@ class TestJobsOption:
 
 class TestModelValidation:
     """Model authority lives at the CLI layer:
-    - general: -m is mandatory (no sane default across OpenAI-compatible
-      endpoints, and a literal 'default' in AgentMeta would be a lie);
+    - explicit -m always wins (e.g. deepseek-flash via ANTHROPIC_BASE_URL);
     - claude: upstream-compatible defaults (analyze: haiku, check: sonnet)."""
-
-    def test_general_without_model_errors(self, monkeypatch, trial):
-        import triage_kit.cli as cli
-
-        from triage_kit.cli import app
-
-        monkeypatch.setattr(cli, "build_backend", lambda *a, **kw: None)
-        result = runner.invoke(app, ["analyze", str(trial),
-                                     "--backend", "general"])
-        assert result.exit_code != 0
-        assert "--model" in result.output
-
-    def test_general_check_without_model_errors(self, monkeypatch, tmp_path):
-        import triage_kit.cli as cli
-
-        from triage_kit.cli import app
-
-        monkeypatch.setattr(cli, "build_backend", lambda *a, **kw: None)
-        result = runner.invoke(app, ["check", str(tmp_path),
-                                     "--backend", "general"])
-        assert result.exit_code != 0
-        assert "--model" in result.output
 
     def test_claude_analyze_defaults_to_haiku(self, fake_backend, trial):
         from triage_kit.cli import app
 
-        result = runner.invoke(app, ["analyze", str(trial),
-                                     "--backend", "claude"])
+        result = runner.invoke(app, ["analyze", str(trial)])
         assert result.exit_code == 0, result.output
         assert fake_backend.calls[0]["model"] == "haiku"
 
@@ -331,19 +292,17 @@ class TestModelValidation:
 
         task = tmp_path / "task"
         make_task(task)
-        result = runner.invoke(app, ["check", str(task),
-                                     "--backend", "claude"])
+        result = runner.invoke(app, ["check", str(task)])
         assert result.exit_code == 0, result.output
         assert fake_backend.calls[0]["model"] == "sonnet"
 
-    def test_general_with_model_passes(self, fake_backend, trial):
+    def test_explicit_model_passes_through(self, fake_backend, trial):
         from triage_kit.cli import app
 
         result = runner.invoke(app, ["analyze", str(trial),
-                                     "--backend", "general",
-                                     "--model", "glm-4.7"])
+                                     "--model", "deepseek-flash"])
         assert result.exit_code == 0, result.output
-        assert fake_backend.calls[0]["model"] == "glm-4.7"
+        assert fake_backend.calls[0]["model"] == "deepseek-flash"
 
 
 class TestCheckCommand:
@@ -538,66 +497,46 @@ class TestBackendSelection:
         )
         assert result.exit_code != 0
 
-    def test_backend_factory_general_shape(self, monkeypatch):
-        """The real factory maps names to harnesses with model plumbing."""
+    def test_default_backend_is_claude(self, monkeypatch, trial):
+        """No --backend: the claude path is chosen by default."""
         import triage_kit.cli as cli
 
-        captured = _patch_openai_with_fake(monkeypatch)
+        captured = {}
 
-        harness = cli.build_backend("general", "glm-4.7", None)
-        assert harness.default_model == "glm-4.7"
-        assert "base_url" not in captured  # default endpoint
+        def fake(name, model):
+            captured["name"] = name
+            return make_fake_backend()
 
-    def test_backend_factory_base_url(self, monkeypatch):
-        import triage_kit.cli as cli
+        monkeypatch.setattr(cli, "build_backend", fake)
 
-        captured = _patch_openai_with_fake(monkeypatch)
+        from triage_kit.cli import app
 
-        cli.build_backend("general", "m", "https://api.example.com/v1")
-        assert captured["base_url"] == "https://api.example.com/v1"
+        result = runner.invoke(app, ["analyze", str(trial)])
+        assert result.exit_code == 0, result.output
+        assert captured["name"] == "claude"
 
-    def test_base_url_with_claude_backend_errors(self, monkeypatch, trial):
-        """#7: --base-url 对 claude 后端无意义，必须显式拒绝而非静默忽略。"""
+    def test_base_url_option_removed(self, trial):
+        """--base-url retired with the general backend (P014): endpoint
+        override is via the ANTHROPIC_BASE_URL environment variable."""
         from triage_kit.cli import app
 
         result = runner.invoke(
             app,
-            ["analyze", str(trial), "--backend", "claude",
+            ["analyze", str(trial),
              "--base-url", "https://api.example.com/v1"],
         )
         assert result.exit_code != 0
-        assert "ANTHROPIC_BASE_URL" in result.output
 
     def test_backend_factory_unknown_name_raises(self):
         import triage_kit.cli as cli
 
         with pytest.raises(ValueError):
-            cli.build_backend("trae", "m", None)
+            cli.build_backend("general", "m")
 
-    def test_base_url_host_added_to_no_proxy(self, monkeypatch):
-        """A system proxy (Windows registry proxies) must not intercept an
-        explicitly targeted endpoint: httpx honors NO_PROXY but skips the
-        WinINET bypass list, so the CLI adds the host itself."""
-        import os
-
+    def test_backend_factory_claude_shape(self, monkeypatch):
+        """The real factory maps the claude name to a harness with model
+        plumbing (the harness import path is real; no SDK call happens)."""
         import triage_kit.cli as cli
 
-        monkeypatch.delenv("NO_PROXY", raising=False)
-        monkeypatch.setattr(cli, "_open_general_backend",
-                            lambda model, base_url: None)
-
-        cli.build_backend(
-            "general", "m", "https://internal.example.com/v1"
-        )
-        assert "internal.example.com" in os.environ["NO_PROXY"]
-
-    def test_no_proxy_not_touched_without_base_url(self, monkeypatch):
-        import os
-
-        import triage_kit.cli as cli
-
-        monkeypatch.delenv("NO_PROXY", raising=False)
-        monkeypatch.setattr(cli, "_open_general_backend",
-                            lambda model, base_url: None)
-        cli.build_backend("general", "m", None)
-        assert "NO_PROXY" not in os.environ
+        harness = cli.build_backend("claude", "deepseek-flash")
+        assert harness.default_model == "deepseek-flash"
