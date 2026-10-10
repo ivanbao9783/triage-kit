@@ -1,6 +1,6 @@
 # P011 — Run log persistence under triage-kit/
 
-Status: **proposed** · Type: feature · Priority: medium
+Status: **accepted** · Type: feature · Priority: medium
 
 ## Background & motivation
 
@@ -29,26 +29,42 @@ requires the log to survive alongside the products.
 
 - Logging goes to the console only (root handler installed by the
   CLI). `-v` toggles DEBUG; nothing is written to disk.
-- The judge sandbox already deny-lists `triage-kit/` for
-  read_file/glob/grep, so persisted logs cannot leak into a later
-  judge run (self-referential bias guard already covers this).
+- Judge-visibility note (corrected 2026-10-10): the earlier claim
+  that "the sandbox already deny-lists `triage-kit/`, so logs cannot
+  leak into a later judge run" described the retired general
+  backend. On the claude path the CLI tools do not pass through any
+  deny-list (the P013 gap): a persisted `run.log` is exactly as
+  visible to a later judge as the `analysis.json` already sitting in
+  the same directory. Persisting the log adds no new exposure
+  surface; closing the gap itself is P013's scope.
 
 ## Design
 
-**To be finalized at Gate 1.** Candidate shape:
+User-confirmed decisions (2026-10-10, Gate 1):
 
-- A per-run file handler attached at CLI start, writing to
-  `<dir>/triage-kit/run.log` (name TBD: `run.log` vs
-  `analysis.log` / `check.log` per command).
-- Level: mirror the console level (INFO default, DEBUG with `-v`).
-- Overwrite per run vs append-with-run-header (append preserves
-  history across `--force` reruns; overwrite keeps size bounded).
-- Concurrency note (P003): 16 workers interleaving into one file
-  handler is safe (logging handlers are locked per-record) and the
-  `[trial_name]` prefixes carry the attribution.
-- Open questions: log file naming; append vs overwrite; whether the
-  job-level product dir or each trial dir gets the log (single
-  job-level file recommended).
+1. **Location & naming (D1)**: one file per invocation, at
+   `<path>/triage-kit/run.log` where `<path>` is the CLI argument
+   (trial dir / job dir / task dir alike — the products dir is
+   `path/triage-kit/` on all three commands, so a single assembly
+   point covers them).
+2. **Overwrite, not append (D2)**: `mode="w"` per run. The log must
+   explain the products it sits next to; append would let stale
+   entries contradict fresh verdicts and grow unboundedly across
+   `--force` reruns.
+3. **File level is always DEBUG (D3)**: the console keeps its
+   current behavior (INFO default, DEBUG with `-v`). The whole point
+   of persistence is after-the-fact debugging (what did the judge
+   read, which turn failed) — that detail lives at DEBUG. Observed
+   volume from the 113-trial E2E: ~17k lines (~2 MB) at full DEBUG,
+   acceptable.
+
+Implementation shape: each CLI command attaches a
+`logging.FileHandler(path/triage-kit/run.log, mode="w")` with level
+DEBUG after argument validation, before execution; the handler is
+removed at command end. Concurrency (P003): 16 workers interleaving
+into one file handler is safe (logging locks per record) and the
+`[trial_name]` prefixes carry attribution. `triage clean` needs no
+change (whole-directory removal already covers the log).
 
 ## Compatibility impact
 
@@ -66,5 +82,8 @@ requires the log to survive alongside the products.
 
 ## Status & links
 
-- Proposed 2026-10-09. Related: P003 (`[trial_name]` prefixes make
-  persisted logs attributable).
+- Proposed 2026-10-09. Gate 1 accepted 2026-10-10 (D1 unified
+  `run.log`, D2 overwrite, D3 file-always-DEBUG). Related: P003
+  (`[trial_name]` prefixes make persisted logs attributable); P013
+  (judge-visibility gap applies to the log the same as to existing
+  products).

@@ -540,3 +540,111 @@ class TestBackendSelection:
 
         harness = cli.build_backend("claude", "deepseek-flash")
         assert harness.default_model == "deepseek-flash"
+
+
+class TestRunLogPersistence:
+    """P011: 每次运行把执行日志落盘到 <path>/triage-kit/run.log。
+
+    契约：单一落点（CLI 参数目录）；覆盖模式（非追加）；文件级别
+    恒 DEBUG（控制台行为不变：默认 WARNING+，-v 才 DEBUG）；clean
+    不产生日志；dispatch 失败不建孤儿目录。
+    """
+
+    def test_analyze_trial_writes_run_log(self, fake_backend, trial):
+        from triage_kit.cli import app
+
+        result = runner.invoke(app, ["analyze", str(trial), "--model", "m1"])
+
+        assert result.exit_code == 0, result.output
+        run_log = trial / "triage-kit" / "run.log"
+        assert run_log.is_file()
+        content = run_log.read_text(encoding="utf-8")
+        # INFO 记录无需 -v 即落盘
+        assert "analysis start" in content
+        assert "analysis finished" in content
+
+    def test_run_log_captures_debug_without_verbose(
+        self, monkeypatch, trial
+    ):
+        """文件级别恒 DEBUG：不带 -v，DEBUG 记录仍落盘。"""
+        import logging as _logging
+
+        import triage_kit.cli as cli
+        from triage_kit.cli import app
+
+        backend = make_fake_backend()
+        inner = backend.query_agent
+
+        def noisy_query_agent(*a, **kw):
+            _logging.getLogger("triage_kit.test_marker").debug(
+                "DEBUG-MARKER"
+            )
+            return inner(*a, **kw)
+
+        backend.query_agent = noisy_query_agent
+        monkeypatch.setattr(
+            cli, "build_backend", lambda name, model: backend
+        )
+
+        result = runner.invoke(app, ["analyze", str(trial), "--model", "m1"])
+
+        assert result.exit_code == 0, result.output
+        content = (trial / "triage-kit" / "run.log").read_text(
+            encoding="utf-8"
+        )
+        assert "DEBUG-MARKER" in content
+
+    def test_run_log_overwritten_not_appended(self, fake_backend, trial):
+        from triage_kit.cli import app
+
+        for extra in ([], ["--force"]):
+            result = runner.invoke(
+                app, ["analyze", str(trial), "--model", "m1", *extra]
+            )
+            assert result.exit_code == 0, result.output
+
+        content = (trial / "triage-kit" / "run.log").read_text(
+            encoding="utf-8"
+        )
+        # 第二次运行覆盖文件：analysis finished 恰好一次（追加则会是两次）
+        assert content.count("analysis finished") == 1
+
+    def test_analyze_job_log_lands_at_job_level(self, fake_backend,
+                                                tmp_path):
+        from triage_kit.cli import app
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        make_trial(tmp_path / "t2__bbb", reward=0.0)
+
+        result = runner.invoke(
+            app, ["analyze", str(tmp_path), "--model", "m1"]
+        )
+
+        assert result.exit_code == 0, result.output
+        # job 级一份日志；trial 级产物目录里没有
+        assert (tmp_path / "triage-kit" / "run.log").is_file()
+        assert not (tmp_path / "t1__aaa" / "triage-kit" / "run.log").exists()
+
+    def test_check_writes_run_log(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        task = tmp_path / "task"
+        make_task(task)
+
+        result = runner.invoke(app, ["check", str(task), "--model", "m1"])
+
+        assert result.exit_code == 0, result.output
+        assert (task / "triage-kit" / "run.log").is_file()
+
+    def test_no_products_dir_when_dispatch_fails(self, fake_backend,
+                                                 tmp_path):
+        """非 trial/job 目录 → 报错退出，不留孤儿 triage-kit/。"""
+        from triage_kit.cli import app
+
+        empty = tmp_path / "empty"
+        empty.mkdir()
+
+        result = runner.invoke(app, ["analyze", str(empty), "--model", "m1"])
+
+        assert result.exit_code != 0
+        assert not (empty / "triage-kit").exists()

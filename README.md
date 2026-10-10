@@ -71,7 +71,8 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 <trial_dir>/triage-kit/          (also written at <job_dir>/ level)
 ├── analysis.json                machine-readable attribution (always English)
 ├── analysis.md                  human-readable rendering (language follows --lang)
-└── analysis.meta.json           cache-identity sidecar (rubric sha + model)
+├── analysis.meta.json           cache-identity sidecar (rubric sha + model)
+└── run.log                      execution log of the run (always DEBUG, overwritten per run)
 ```
 
 ### `triage check <task_dir>`
@@ -84,7 +85,7 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 | `-f, --force` | Re-check even if cached `triage-kit/check-result.json` exists (overwrites) |
 | `-v, --verbose` | Debug logging |
 
-Product: `triage-kit/check-result.json` (+ `check-result.meta.json` sidecar) in the task directory.
+Product: `triage-kit/check-result.json` (+ `check-result.meta.json` sidecar + `run.log`) in the task directory.
 
 ### `triage clean <path>`
 
@@ -93,6 +94,21 @@ Product: `triage-kit/check-result.json` (+ `check-result.meta.json` sidecar) in 
 | `-y, --yes` | Actually delete (default is a dry-run listing) |
 
 Restores evaluated directories to their pre-triage state: recursively finds and removes every `triage-kit/` product directory under the given trial/job/task path. Dry-run by default — pass `--yes` to delete. Original evaluation data (`result.json`, `trajectory.json`, `task.toml`, ...) is never touched. A locked/forbidden target is reported by name and skipped (remaining targets are still removed; exit code 1 signals the partial failure).
+
+### Single-item flows
+
+Both commands also accept single-item targets — useful for a quick look at one badcase or one task:
+
+```bash
+# one trial: analyze just this badcase (no job-level aggregation,
+# no thread pool; products land in <trial_dir>/triage-kit/)
+triage analyze outputs/xxx/details/some-trial__abc123 --model deepseek-flash
+
+# one task: check a single task directory (task.toml required)
+triage check path/to/tasks/fix-the-bug --model deepseek-flash
+```
+
+Single-trial analysis produces trial-level products only; the job-level aggregation summary is not generated.
 
 ### Backends
 
@@ -151,7 +167,7 @@ pre-development gate.
 
 ```bash
 pip install -r requirements.txt
-pytest                    # 127 tests, no network access needed
+pytest                    # 137 tests, no network access needed
 ```
 
 ## License

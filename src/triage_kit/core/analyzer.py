@@ -170,8 +170,12 @@ class Analyzer:
             schema=self._response_schema,
         )
         if cached is not None:
+            logger.info("cache hit: reusing cached analysis")
             return cached
 
+        # P011: start/finish markers live here (not in the pool worker)
+        # so the single-trial path logs the same run trace as job mode.
+        logger.info("analysis start")
         task_dir = trial_reader.extract_task_dir(trial_dir, override=task_dir)
         prompt = self._template.format(
             task_section=_render_task_section(task_dir),
@@ -209,6 +213,7 @@ class Analyzer:
                 _render_analysis_md(analysis), encoding="utf-8"
             )
         cache.write_json(products_dir / "analysis.meta.json", self._identity())
+        logger.info("analysis finished")
         return analysis
 
     def _analyze_one(
@@ -221,9 +226,7 @@ class Analyzer:
         """
         token = _current_trial.set(trial_dir.name)
         try:
-            logger.info("analysis start")
             analysis = self.analyze_trial(trial_dir)
-            logger.info("analysis finished")
             return trial_dir.name, analysis, None
         except Exception as exc:
             return trial_dir.name, None, exc

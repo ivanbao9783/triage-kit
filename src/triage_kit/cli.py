@@ -7,7 +7,9 @@ Future backends (codex SDK, DeepSeek harness SDK) will join --backend.
 The trae harness is a skill form, not a CLI option.
 """
 
+import contextlib
 import logging
+import sys
 from pathlib import Path
 
 import typer
@@ -23,6 +25,8 @@ app = typer.Typer(
     help="Badcase triage & task quality check for Harbor-ecosystem evaluation.",
 )
 logger = logging.getLogger(__name__)
+
+_PRODUCTS_DIR_NAME = "triage-kit"
 
 
 def build_backend(name: str, model: str | None):
@@ -69,6 +73,43 @@ def _fail(message: str) -> None:
     raise typer.Exit(1)
 
 
+@contextlib.contextmanager
+def _persist_run_log(target_dir: Path, verbose: bool):
+    """P011: persist this run's log to <target_dir>/triage-kit/run.log.
+
+    Contract (Gate 1, 2026-10-10): overwritten per run (mode="w"),
+    always captures DEBUG — the file exists to explain the products it
+    sits next to (what the judge read, which turn failed). The console
+    keeps its default behavior: WARNING+ unless -v lowers it to DEBUG.
+    Handlers are removed on exit so repeated in-process invocations do
+    not stack handlers.
+    """
+    products = target_dir / _PRODUCTS_DIR_NAME
+    products.mkdir(exist_ok=True)
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    file_handler = logging.FileHandler(
+        products / "run.log", mode="w", encoding="utf-8"
+    )
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(logging.DEBUG if verbose else logging.WARNING)
+    console.setFormatter(
+        logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+    )
+    root.addHandler(file_handler)
+    root.addHandler(console)
+    try:
+        yield
+    finally:
+        root.removeHandler(file_handler)
+        root.removeHandler(console)
+        file_handler.close()
+        console.close()
+
+
 @app.command()
 def analyze(
     path: Path = typer.Argument(..., help="Trial directory or job directory."),
@@ -108,8 +149,6 @@ def analyze(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Attribute badcases: judge trials against a rubric."""
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG)
     if lang not in ("en", "zh"):
         _fail(f"--lang must be 'en' or 'zh', got {lang!r}")
     if jobs < 1:
@@ -141,11 +180,14 @@ def analyze(
         )
 
         if trial_reader.is_trial_dir(path):
-            analyzer.analyze_trial(path, task_dir=task_dir)
+            run = lambda: analyzer.analyze_trial(path, task_dir=task_dir)
         elif trial_reader.list_trials(path):
-            analyzer.analyze_job(path, failing_only=failing)
+            run = lambda: analyzer.analyze_job(path, failing_only=failing)
         else:
             _fail(f"not a trial or job directory: {path}")
+        # P011: persist the run log next to the products it explains.
+        with _persist_run_log(path, verbose):
+            run()
     except ValueError as e:
         _fail(str(e))
 
@@ -173,9 +215,6 @@ def check(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Inspect task quality: judge a task directory against a rubric."""
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG)
-
     path = Path(path)
     if not path.exists():
         _fail(f"path not found: {path}")
@@ -192,7 +231,9 @@ def check(
             model=effective_model,
             force=force,
         )
-        checker.check_task(path)
+        # P011: persist the run log next to the products it explains.
+        with _persist_run_log(path, verbose):
+            checker.check_task(path)
     except ValueError as e:
         _fail(str(e))
 

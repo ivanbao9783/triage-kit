@@ -1,6 +1,6 @@
 # P008 — Single-item flows: verification + documentation
 
-Status: **proposed** · Type: docs · Priority: low
+Status: **building** · Type: docs · Priority: low
 
 ## Background & motivation
 
@@ -57,3 +57,7 @@ None — docs only.
 ## Status & links
 
 - Proposed 2026-10-09.
+- Building 2026-10-10: README "Single-item flows" subsection landed
+  (both command forms + product expectations). Live verification of
+  both flows is folded into the next unified E2E run (user decision:
+  batch the live checks instead of per-feature runs).

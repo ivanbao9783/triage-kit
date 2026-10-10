@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：CLI 三命令（analyze / check / clean）可用，127 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。
+**项目现状**：CLI 三命令（analyze / check / clean）可用，137 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。
 
 ---
 
@@ -42,6 +42,7 @@
 | 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P013）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P013 待办 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
 | 多语言 | `--lang zh`：`analysis.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P009 路线 B）；`analysis.json` 恒英文；`analysis.zh.md` 退役 | 已落地 |
+| 运行日志 | 每次 CLI 运行把执行日志落盘 `<CLI 参数目录>/triage-kit/run.log`（覆盖式、文件恒 DEBUG、控制台行为不变，P011）；与产物同生共死，`clean` 一并复原 | 已落地 |
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
 | 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——待立项 | 部分实现 |
 | task 目录 | analyze 的降级路径按主路径设计（跨机器拷贝场景 task path 必然失效），支持 `--task-dir` 覆盖 | 已落地 |
@@ -120,7 +121,7 @@ triage-kit/
 │   │
 │   └── cli.py                       入口：triage analyze / check / clean
 │
-├── tests/                           ← pytest，127 项；conftest.py 集中共享工厂/常量/FakeBackend
+├── tests/                           ← pytest，137 项；conftest.py 集中共享工厂/常量/FakeBackend
 ├── docs/
 │   ├── DESIGN.md                    本文档
 │   └── proposals/                   特性设计文档（P000 流程）
@@ -190,17 +191,19 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
 ├── triage-kit/                                  job 级产物目录
 │   ├── analysis.json                            job 级聚合（恒英文）
 │   ├── analysis.md                              job_summary 文本版（语言随 --lang）
-│   └── analysis.meta.json                       缓存身份 sidecar
+│   ├── analysis.meta.json                       缓存身份 sidecar
+│   └── run.log                                  本次运行执行日志（恒 DEBUG、覆盖式，P011）
 └── ts-pattern-match-each__9giF4pL/
     ├── result.json                              （原有，只读）
     ├── agent/trajectory.json                    （原有，只读——judge 的证据源）
-    └── triage-kit/                             trial 级产物目录
+    └── triage-kit/                             trial 级产物目录（单 trial 直调时含 run.log）
         ├── analysis.json                        单 trial 归因（恒英文）
         ├── analysis.md                          人读版（语言随 --lang）
         └── analysis.meta.json                  缓存身份 sidecar
 ```
 
-**check 产物**同规则：`<task_dir>/triage-kit/check-result.json` + `check-result.meta.json`。
+**check 产物**同规则：`<task_dir>/triage-kit/check-result.json` + `check-result.meta.json` + `run.log`。
+**run.log 落点**（P011）：`<CLI 参数目录>/triage-kit/run.log`——单 trial 直调落 trial 级，job 模式落 job 级（一份，`[trial_name]` 前缀归因），check 落 task 级；`triage clean` 随目录一并复原。
 
 **缓存语义**：
 - 身份 = sidecar 记录的 **rubric 内容 sha256 + model**。匹配 → 复用（含 schema 回验）；不匹配 → 报错提示 `--force`；无 sidecar（legacy 平铺产物）→ 视为 miss 重跑覆盖
@@ -298,7 +301,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十、工程质量机制
 
-- **TDD**：全项目红-绿流程，测试先行（127 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
+- **TDD**：全项目红-绿流程，测试先行（137 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
 - **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走实测 E2E（DeepSeek anthropic 兼容端点，含 113-trial 真实 job 复跑）
 - **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P012 的核心收益——自研 harness 的 forcing-400 / 工具异常两类缺陷随 general 退役消失，相关 dropped 条目文档已删除）
@@ -313,7 +316,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
 - **非 Anthropic 官方模型的 meta 缺失**：兼容端点（如 DeepSeek）不回填 token usage，`AgentMeta` 的 token 计数为 None、`analysis.meta.json` 无 token 统计（不影响判定与缓存身份，cost 由 CLI 回填）
 - **中文报告为翻译体**：（P009 已修复并升级为路线 B）曾为英文报告的逐句翻译（`analysis.zh.md` 双文件形态）；现 `--lang zh` 直接以中文原生撰写生成 `analysis.md`（判定与 JSON 一致、标识符保留英文，JSON 契约产物恒英文）
-- **运行日志不落盘**：执行日志仅输出控制台，事后 debug（judge 读了什么/哪一轮失败）无据可查——需随产物持久化到 `triage-kit/`（P011 立项待办）
+- **运行日志不落盘**：（P011 已修复）执行日志现持久化到 `<CLI 参数目录>/triage-kit/run.log`（恒 DEBUG、覆盖式，控制台行为不变），随产物同生共死，`triage clean` 一并复原
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐
 - **task 目录跨机失效是主路径**：Linux 产出的 result.json 拷贝到 Windows 后 task path 必然不可解析，task_section 的降级话术（"infer from trajectory"）在跨机场景是常态而非边缘；DeepSWE 样本中 mini-swe-agent 轨迹内嵌完整任务 prompt，降级路径实测可用，但不具普遍性
 - **job 模式不透传 --task-dir**：一个 job 的多个 trial 可能来自不同任务，单一路径无法覆盖
