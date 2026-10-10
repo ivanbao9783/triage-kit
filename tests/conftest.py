@@ -60,7 +60,7 @@ def make_backend_keyed(mapping: dict, *, delays: dict | None = None):
     """Order-independent fake for concurrent runs.
 
     query_agent dispatches on the trial directory name (cwd), query on
-    prompt shape (leading 'Translate' = zh hop, otherwise job
+    prompt shape (撰写' = zh compose hop, otherwise job
     aggregation) — no dependence on call order. Optional per-trial
     delays let tests invert the completion order.
     """
@@ -84,8 +84,7 @@ def make_backend_keyed(mapping: dict, *, delays: dict | None = None):
 
         def query(self, prompt, *, model):
             self.plain_prompts.append(prompt)
-            text = ("TRANSLATED" if prompt.startswith("Translate")
-                    else "JOB SUMMARY")
+            text = ("ZH REPORT" if "撰写" in prompt else "JOB SUMMARY")
             return text, AgentMeta(n_turns=0, model=model)
 
     return FakeBackend()

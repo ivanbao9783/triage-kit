@@ -1,6 +1,17 @@
 # P011 — Native Chinese reports (replace translation hop)
 
-Status: **proposed** · Type: optimization · Priority: medium
+Status: **building** · Type: optimization · Priority: medium
+Scope revision (2026-10-10, user decision): `analysis.zh.md` is retired;
+`--lang` now selects the language of `analysis.md` itself.
+
+## Goals
+
+- `--lang zh` produces a natively composed Chinese `analysis.md`
+  (single human-readable report per level); `--lang en` (default)
+  keeps the mechanical English rendering — the language follows the
+  flag instead of a side-by-side copy.
+- `analysis.json` stays the stable English contract artifact at all
+  times (judge reasoning unchanged, downstream consumers unaffected).
 
 ## Background & motivation
 
@@ -13,6 +24,10 @@ user-experienced defect: the output reads as translationese —
 grammatically valid but unnatural Chinese (European-style sentence
 structure, unnatural terminology), poor readability for native
 reviewers.
+
+Root cause: the model is instructed to *translate*, so it performs
+sentence-level re-rendering of English prose instead of composing in
+Chinese.
 
 ## Goals
 
@@ -28,42 +43,133 @@ reviewers.
 - No new product files (still one `analysis.zh.md` per level).
 - No locale framework / multi-language generalization (zh only, as
   today).
+- No job-aggregation quality work (the summary content itself is
+  P012's scope; P011 only changes how the zh report is composed).
 
 ## Current state & gap
 
-- Second-hop call in `core/analyzer.py` (~line 68 prompt, ~129
-  writer): pure translation of the English markdown.
-- The model never re-reasons in Chinese; it re-renders English
+- Second-hop call in `core/analyzer.py`: `_TRANSLATE_INSTRUCTION` +
+  the English markdown → `_translate_markdown()` writes
+  `analysis.zh.md`. Used by both the trial path (after
+  `_render_analysis_md`) and the job path (after rendering
+  `# Job Analysis\n\n{summary}`).
+- The model never composes in Chinese; it re-renders English
   sentences, which is the root of the translationese.
 
 ## Design
 
-**To be finalized at Gate 1.** Candidate directions:
+User-confirmed decisions (2026-10-10, Gate 1):
 
-- (a) Rewrite-not-translate: change the second-hop prompt to "用中文
-  撰写诊断报告" with the analysis content (JSON verdicts + English
-  report as source material, explicitly instructing native-style
-  composition rather than sentence-level translation).
-- (b) Parallel generation: run the zh hop on the same trial context
-  (task section + trajectory pointers) as a fresh composition task —
-  higher fidelity but a second full agent pass (cost).
-- Open question: is (a) sufficient in practice, or does quality
-  demand (b)?
+1. **Approach (a) — compose, don't translate.** The second hop keeps
+   its current shape (a single plain `backend.query` call, no tools,
+   same cost as today) but the prompt and input change:
+   - Prompt is written in Chinese and instructs native Chinese
+     technical composition ("用中文撰写诊断报告"), explicitly
+     forbidding sentence-level translation of English source.
+   - Input is the **structured analysis payload** (the same dict
+     behind the English markdown), not the English markdown:
+     - trial level: the trial `analysis.json` content (trial_name,
+       summary, checks with outcome + explanation)
+     - job level: the job summary text (the sole content of the
+       English job markdown)
+   - Verdict consistency is a hard constraint: outcomes/verdicts in
+     the zh report must match the JSON exactly; the model must not
+     re-adjudicate.
+   - Identifiers (file names, trial names, criterion names such as
+     `reward_hacking`) stay in English.
+2. **Structure: keep the existing skeleton.** The zh report follows
+   the same section layout as the English `analysis.md` (title →
+   summary → one section per criterion with outcome), so the two
+   reports stay side-by-side comparable.
+3. **Job level: same treatment.** Both call sites switch to the new
+   compose prompt; one instruction constant, two input shapes
+   (trial JSON payload / job summary).
+
+Code shape: `_TRANSLATE_INSTRUCTION` → `_ZH_COMPOSE_INSTRUCTION`
+(Chinese text); `_translate_markdown(products_dir, markdown)` →
+`_compose_zh_report(products_dir, payload)` where payload is the
+structured source; both `analyze_trial` and the job path pass their
+dict/summary instead of the rendered markdown. Empty-output guard and
+`analysis.zh.md` naming/placement unchanged.
+
+### Payload contract (finalized 2026-10-10)
+
+**Trial level** — the input is the trial `analysis.json` content
+verbatim (the `model_dump(mode="json")` result already validated
+against the response schema; no additions or removals):
+
+```json
+{
+  "trial_name": "<trial directory name>",
+  "summary": "<English summary paragraph>",
+  "checks": {
+    "<criterion>": {"outcome": "pass|fail|not_applicable",
+                    "explanation": "<English reasoning>"}
+  }
+}
+```
+
+`checks` keys are rubric-determined (count not fixed).
+Serialization: `json.dumps(analysis, ensure_ascii=False, indent=2)`.
+The English `analysis.md` no longer enters the second hop (it is a
+mechanical rendering of the JSON — a strict subset informationally).
+
+**Job level** — the input is the job `summary` string alone (exactly
+what the English job markdown renders: `# Job Analysis` + summary; no
+trial detail expansion).
+
+**Prompt structure** — a shared Chinese rules block plus a
+level-specific skeleton instruction:
+
+- Shared rules: (1) compose in native Chinese technical prose, no
+  sentence-level translation; (2) outcomes must match the input
+  exactly — no re-adjudication; (3) identifiers (file/trial/criterion
+  names, metrics like p2p/f2p) stay in English; (4) Markdown body
+  only, no preamble, no code fences.
+- Trial skeleton: `# 分析：{trial_name}` → Chinese summary paragraph →
+  one `## {criterion}: {outcome}` section per criterion (isomorphic
+  to the English `analysis.md`).
+- Job skeleton: `# 作业级分析` → Chinese summary body (user-confirmed
+  title, 2026-10-10).
+
+Rejected alternative: (b) parallel generation (a second full agent
+pass over the trial context composing directly in Chinese) — doubles
+per-trial cost and, worse, two independent reasoning passes can
+diverge on verdicts, breaking the zh/JSON consistency guarantee.
 
 ## Compatibility impact
 
-- `analysis.zh.md` content style changes (intended); file name,
-  location, and trigger (`--lang zh`) unchanged. No schema impact.
+- **Product naming (scope revision)**: `analysis.zh.md` is retired.
+  `--lang zh` writes the Chinese composition directly as
+  `analysis.md`; `--lang en` keeps the mechanical English rendering.
+  Same for both levels (trial and job).
+- `analysis.json` (contract artifact) is always English — judge
+  prompt, rubric assets, and cached verdicts are language-invariant.
+- Cache semantics unchanged (identity = rubric sha + model; the zh
+  compose hop was never part of cache identity). On a cache hit with
+  `--lang zh`, no compose happens — rerun with `--force` to get a
+  Chinese `analysis.md` (user decision (i), 2026-10-10).
+- `triage clean` is unaffected (it removes whole `triage-kit/`
+  directories; file names inside are irrelevant).
 
 ## Verification plan
 
-- Unit: prompt content assert updated (translation → composition
-  wording); product naming/placement unchanged.
-- Live: regenerate zh products for a handful of trials from
-  `details`; readability review by the user (native reviewer is the
-  oracle here).
+- TDD: update/extend unit tests — compose prompt content (native
+  composition wording, verdict-consistency constraint, identifier
+  rules), input shape (payload not markdown), `--lang zh` writes
+  Chinese content into `analysis.md` (no `.zh.md`), `--lang en`
+  unchanged, empty-output guard still raises.
+- Live: regenerate products for a handful of trials from `details`
+  (`--force --lang zh`); readability review by the user (native
+  reviewer is the oracle here).
 
 ## Status & links
 
-- Proposed 2026-10-09. Evidence: `details/triage-kit/analysis.zh.md`
-  translationese observed in live E2E.
+- Proposed 2026-10-09. Gate 1 accepted 2026-10-10 (user confirmed
+  approach (a), skeleton retention, job-level inclusion). Scope
+  revised 2026-10-10 after the 3-trial live E2E review: route B
+  (md language follows `--lang`, JSON stays English) + cache-hit
+  decision (i) (no compose on hit, `--force` to regenerate).
+  Evidence: `details/triage-kit/analysis.zh.md` translationese
+  observed in live E2E. Related: P012 (job summary quality —
+  orthogonal).

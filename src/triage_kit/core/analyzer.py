@@ -64,12 +64,29 @@ _DEGRADED_TASK_SECTION = (
     "Use the trajectory and test output to infer what the task required."
 )
 
-_TRANSLATE_INSTRUCTION = (
-    "Translate the following Markdown report into Simplified Chinese. "
-    "Preserve the Markdown structure (headings, lists, code blocks) and "
-    "keep technical identifiers (file names, trial names, criterion "
-    "names such as reward_hacking) untranslated. Output ONLY the "
-    "translated Markdown, no preamble.\n\n"
+_ZH_COMPOSE_RULES = (
+    "你是一名资深评测诊断工程师。请基于下方提供的诊断材料，"
+    "用中文撰写一份诊断报告。\n"
+    "要求：\n"
+    "1. 直接用中文技术写作组织行文，不要逐句翻译英文原文。\n"
+    "2. 判定结论（pass/fail/not_applicable）必须与输入完全一致，"
+    "不得重新判定或引入新结论。\n"
+    "3. 文件名、trial 名、判据名（如 reward_hacking）、"
+    "指标名（如 p2p/f2p）保留英文原文。\n"
+    "4. 仅输出 Markdown 正文，无前言、无解释、无代码围栏。\n"
+)
+
+_ZH_TRIAL_COMPOSE = _ZH_COMPOSE_RULES + (
+    "报告结构（与英文版 analysis.md 同构）：\n"
+    "一级标题「# 分析：{trial_name}」→ 中文总述段 → "
+    "每个判据一节「## {判据名}: {outcome}」，节内为该判据的中文论述。\n"
+    "\n诊断材料（JSON）：\n\n"
+)
+
+_ZH_JOB_COMPOSE = _ZH_COMPOSE_RULES + (
+    "报告结构（与英文版 analysis.md 同构）：\n"
+    "一级标题「# 作业级分析」→ 中文综述正文。\n"
+    "\n诊断材料（job 综述）：\n\n"
 )
 
 
@@ -125,19 +142,21 @@ class Analyzer:
     def _identity(self) -> dict:
         return {"rubric_sha256": self.rubric.source_sha256, "model": self.model}
 
-    def _translate_markdown(self, products_dir: Path, markdown: str) -> None:
-        """Second-hop translation: write analysis.zh.md next to the
-        (untouched, English) analysis.md inside the products directory."""
-        translated, _meta = self.backend.query(
-            _TRANSLATE_INSTRUCTION + markdown, model=self.model
+    def _compose_zh_report(self, products_dir: Path,
+                           instruction: str, md_name: str,
+                           payload: str) -> None:
+        """Second-hop composition: natively write the Chinese report
+        (as analysis.md) from the structured payload — not a
+        translation of an English markdown rendering."""
+        composed, _meta = self.backend.query(
+            instruction + payload, model=self.model
         )
-        if not translated.strip():
+        if not composed.strip():
             raise ValueError(
-                f"translation returned empty output (dir={products_dir.parent.name})"
+                f"zh composition returned empty output "
+                f"(dir={products_dir.parent.name})"
             )
-        (products_dir / "analysis.zh.md").write_text(
-            translated, encoding="utf-8"
-        )
+        (products_dir / md_name).write_text(composed, encoding="utf-8")
 
     def analyze_trial(self, trial_dir: Path, *, task_dir: Path | None = None) -> dict:
         trial_dir = Path(trial_dir)
@@ -176,10 +195,19 @@ class Analyzer:
 
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "analysis.json", analysis)
-        markdown = _render_analysis_md(analysis)
-        (products_dir / "analysis.md").write_text(markdown, encoding="utf-8")
         if self.lang == "zh":
-            self._translate_markdown(products_dir, markdown)
+            # P011 route B: --lang zh composes the human-readable
+            # report natively in Chinese directly as analysis.md (the
+            # English JSON stays the contract artifact; analysis.zh.md
+            # is retired).
+            self._compose_zh_report(
+                products_dir, _ZH_TRIAL_COMPOSE, "analysis.md",
+                json.dumps(analysis, ensure_ascii=False, indent=2),
+            )
+        else:
+            (products_dir / "analysis.md").write_text(
+                _render_analysis_md(analysis), encoding="utf-8"
+            )
         cache.write_json(products_dir / "analysis.meta.json", self._identity())
         return analysis
 
@@ -257,8 +285,15 @@ class Analyzer:
         products_dir = job_dir / _PRODUCTS_DIR
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "analysis.json", result)
-        markdown = f"# Job Analysis\n\n{summary}\n"
-        (products_dir / "analysis.md").write_text(markdown, encoding="utf-8")
         if self.lang == "zh":
-            self._translate_markdown(products_dir, markdown)
+            # P011 route B: the job report is composed natively in
+            # Chinese directly as analysis.md (see analyze_trial).
+            self._compose_zh_report(
+                products_dir, _ZH_JOB_COMPOSE, "analysis.md", summary
+            )
+        else:
+            markdown = f"# Job Analysis\n\n{summary}\n"
+            (products_dir / "analysis.md").write_text(
+                markdown, encoding="utf-8"
+            )
         return result

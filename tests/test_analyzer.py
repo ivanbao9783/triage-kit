@@ -147,56 +147,55 @@ class TestAnalyzeTrial:
         assert (tk / "analysis.json").is_file()
         assert not (tmp_path / "analysis.md").exists()
 
-    def test_lang_zh_writes_translated_copy_per_trial_and_job(
+    def test_lang_zh_writes_native_md_per_trial_and_job(
         self, tmp_path, rubric
     ):
-        """Q3: --lang zh 在英文产物之外追加 analysis.zh.md。
-
-        翻译二跳：analysis.md 保持英文不动，中文版是增量产物。
-        job 级翻译用一次 query，trial 级各一次——本测试共
-        2 trial + 1 job = 3 次翻译调用。
+        """P011 路线 B: --lang zh 时 analysis.md 即中文原生撰写版，
+        analysis.zh.md 退役（不再产生）；JSON 契约产物恒英文。
         """
         from triage_kit.core.analyzer import Analyzer
 
         make_trial(tmp_path / "t1__aaa", reward=0.0)
         make_trial(tmp_path / "t2__bbb", reward=0.0)
-        # Responses are consumed in true call order — per-trial translation
+        # Responses are consumed in true call order — per-trial compose
         # happens inside analyze_trial, interleaved between agent calls:
         # agent(t1) → query(t1 zh) → agent(t2) → query(t2 zh) → job agg → job zh
         backend = make_backend_seq([
             dict(GOOD_RESPONSE, trial_name="t1__aaa"),
-            "TRANSLATED",   # t1 zh
+            "ZH REPORT t1",   # t1 zh
             dict(GOOD_RESPONSE, trial_name="t2__bbb"),
-            "TRANSLATED",   # t2 zh
-            "JOB SUMMARY",  # job aggregation
-            "TRANSLATED",   # job zh
+            "ZH REPORT t2",   # t2 zh
+            "JOB SUMMARY",    # job aggregation
+            "ZH REPORT job",  # job zh
         ])
         Analyzer(backend=backend, rubric=rubric, model="test-model",
                  lang="zh").analyze_job(tmp_path)
 
-        # trial 级中文副本
+        # trial 级：analysis.md = 中文 compose 结果；无 .zh.md
         for name in ("t1__aaa", "t2__bbb"):
-            zh = (tmp_path / name / "triage-kit" / "analysis.zh.md").read_text(
+            md = (tmp_path / name / "triage-kit" / "analysis.md").read_text(
                 encoding="utf-8"
             )
-            assert zh == "TRANSLATED"
-        # job 级中文副本
-        assert (tmp_path / "triage-kit" / "analysis.zh.md").read_text(
+            assert md == f"ZH REPORT {name.split('__')[0]}"
+            assert not (tmp_path / name / "triage-kit" / "analysis.zh.md").exists()
+        # job 级同理
+        assert (tmp_path / "triage-kit" / "analysis.md").read_text(
             encoding="utf-8"
-        ) == "TRANSLATED"
-        # 英文产物与中文版并存
-        en = (tmp_path / "t1__aaa" / "triage-kit" / "analysis.md").read_text(
-            encoding="utf-8"
+        ) == "ZH REPORT job"
+        assert not (tmp_path / "triage-kit" / "analysis.zh.md").exists()
+        # JSON 契约产物恒英文（judge 输出原样落盘）
+        saved = json.loads(
+            (tmp_path / "t1__aaa" / "triage-kit" / "analysis.json").read_text(
+                encoding="utf-8"
+            )
         )
-        assert "Agent solved it." in en
-        # 翻译调用次数：2 trial + 1 job = 3（另有 1 次 job 聚合 query）
-        translations = [
-            p for p in backend.plain_prompts if p.startswith("Translate")
-        ]
-        assert len(translations) == 3
+        assert saved["summary"] == "Agent solved it."
+        # compose 调用次数：2 trial + 1 job = 3（另有 1 次 job 聚合 query）
+        composes = [p for p in backend.plain_prompts if "撰写" in p]
+        assert len(composes) == 3
 
     def test_lang_default_is_english_no_extra_calls(self, trial, rubric):
-        """Q3: 默认英文——零翻译调用，无中文副本。"""
+        """Q3/P011: 默认英文——零 compose 调用，md 为机械渲染英文。"""
         from triage_kit.core.analyzer import Analyzer
 
         backend = make_backend(GOOD_RESPONSE)
@@ -204,6 +203,8 @@ class TestAnalyzeTrial:
                  model="test-model").analyze_trial(trial)
 
         assert len(backend.plain_prompts) == 0
+        md = (trial / "triage-kit" / "analysis.md").read_text(encoding="utf-8")
+        assert md.startswith("# Analysis:")
         assert not (trial / "triage-kit" / "analysis.zh.md").exists()
 
     def test_task_dir_override_lands_in_prompt(self, trial, tmp_path, rubric):
@@ -497,6 +498,94 @@ class TestAnalyzeJob:
         assert len(backend.plain_prompts) == 1
         assert result["failed_trials"] == ["t1__aaa"]
         assert result["trials"][0]["trial_name"] == "t2__bbb"
+
+
+class TestZhCompose:
+    """P011: --lang zh 二跳从「翻译」改为「中文原生撰写」。
+
+    输入源 = 结构化 payload（trial 级 analysis.json 内容 / job 级
+    summary 文本），不再喂英文 markdown；prompt 为中文写作指令 +
+    判定一致性硬约束 + 标识符保留规则。
+    """
+
+    def test_trial_compose_prompt_carries_payload_not_markdown(
+        self, trial, rubric
+    ):
+        """trial 级：prompt 含 JSON payload（trial_name/outcome 值），
+        不含英文 md 的机械渲染标题「# Analysis:」。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        backend = make_backend(GOOD_RESPONSE)
+        Analyzer(backend=backend, rubric=rubric, model="test-model",
+                 lang="zh").analyze_trial(trial)
+
+        assert len(backend.plain_prompts) == 1
+        prompt = backend.plain_prompts[0]
+        # payload 是 JSON 源：字段名与判定值都应在
+        assert '"trial_name"' in prompt
+        assert '"demo__abc123"' in prompt
+        assert '"reward_hacking"' in prompt
+        assert '"pass"' in prompt
+        # 英文 markdown 渲染产物不进入二跳
+        assert "# Analysis:" not in prompt
+
+    def test_trial_compose_prompt_rules(self, trial, rubric):
+        """trial 级指令：中文原生写作 + 判定一致 + 标识符保留 +
+        骨架同构（判据分节标题格式）。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        backend = make_backend(GOOD_RESPONSE)
+        Analyzer(backend=backend, rubric=rubric, model="test-model",
+                 lang="zh").analyze_trial(trial)
+
+        prompt = backend.plain_prompts[0]
+        assert "撰写" in prompt          # compose, not translate
+        assert "翻译" not in prompt.replace("不要逐句翻译", "")
+        assert "不得重新判定" in prompt    # verdict consistency
+        assert "reward_hacking" in prompt  # identifiers stay English
+        # 骨架约定：按判据分节
+        assert "## " in prompt or "判据" in prompt
+
+    def test_job_compose_prompt_carries_summary_text(self, tmp_path, rubric):
+        """job 级：输入是 job summary 文本（即英文 md 渲染的全部内容），
+        标题为「# 作业级分析」。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        make_trial(tmp_path / "t1__aaa", reward=0.0)
+        backend = make_backend_seq([
+            dict(GOOD_RESPONSE, trial_name="t1__aaa"),
+            "ZH REPORT t1",   # t1 zh compose (inside analyze_trial)
+            "JOB SUMMARY",    # job aggregation
+            "ZH REPORT job",  # job zh compose
+        ])
+        Analyzer(backend=backend, rubric=rubric, model="test-model",
+                 lang="zh").analyze_job(tmp_path)
+
+        # plain_prompts: [t1 zh compose, job aggregation, job zh compose]
+        assert len(backend.plain_prompts) == 3
+        zh_prompt = backend.plain_prompts[2]
+        assert "撰写" in zh_prompt
+        assert "JOB SUMMARY" in zh_prompt       # summary text is the payload
+        assert "作业级分析" in zh_prompt          # skeleton title instruction
+        # job 级不喂 trial 明细 JSON
+        assert '"trial_name"' not in zh_prompt
+
+    def test_empty_compose_output_raises(self, trial, rubric):
+        """空输出 guard 沿用：compose 返回空 → ValueError，md 不落盘。"""
+        from triage_kit.core.analyzer import Analyzer
+
+        class EmptyZhBackend:
+            def query_agent(self, prompt, *, cwd, model, add_dirs=None,
+                            output_schema=None, max_turns=15):
+                return GOOD_RESPONSE, None
+
+            def query(self, prompt, *, model):
+                return "", None
+
+        with pytest.raises(ValueError, match="empty"):
+            Analyzer(backend=EmptyZhBackend(), rubric=rubric,
+                     model="test-model", lang="zh").analyze_trial(trial)
+        assert not (trial / "triage-kit" / "analysis.md").exists()
 
 
 class TestParallelAnalysis:

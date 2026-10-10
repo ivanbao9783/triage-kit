@@ -96,8 +96,9 @@ def analyze(
     ),
     lang: str = typer.Option(
         "en", "--lang",
-        help="Product language: en (default) or zh — adds a translated "
-             "analysis.zh.md next to the English products.",
+        help="Report language for analysis.md: en (default, mechanical "
+             "rendering) or zh (natively composed Chinese; analysis.json "
+             "stays English).",
     ),
     jobs: int = typer.Option(
         1, "--jobs", "-j",

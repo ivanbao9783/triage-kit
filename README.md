@@ -31,7 +31,7 @@ triage clean outputs/xxx/details         # dry-run: just list
 triage clean outputs/xxx/details --yes   # actually delete
 ```
 
-Add `--lang zh` to also get a Simplified-Chinese copy (`analysis.zh.md`) of every report.
+Use `--lang zh` to get `analysis.md` natively composed in Simplified Chinese (default `en` keeps the mechanical English rendering; `analysis.json` stays English either way).
 
 For task quality inspection before running an evaluation:
 
@@ -61,7 +61,7 @@ Requires Python 3.11+. The claude-agent-sdk dependency bundles the Claude Code C
 | `--backend claude` | Backend selection (default: `claude`; more backends planned) |
 | `-m, --model <name>` | Model name (default: `haiku`; pass e.g. `deepseek-flash` when using `ANTHROPIC_BASE_URL`) |
 | `-f, --force` | Re-analyze even if cached `triage-kit/analysis.json` exists (overwrites) |
-| `--lang en\|zh` | Product language (default: `en`); `zh` adds a translated `analysis.zh.md` |
+| `--lang en\|zh` | Report language for `analysis.md` (default: `en`; `zh` = natively composed Chinese, `analysis.json` stays English) |
 | `-j, --jobs <n>` | Concurrent trial analyses in job mode (default: `1` = sequential; single-trial analysis is never pooled) |
 | `-v, --verbose` | Debug logging |
 
@@ -69,10 +69,9 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 
 ```
 <trial_dir>/triage-kit/          (also written at <job_dir>/ level)
-├── analysis.json                machine-readable attribution
-├── analysis.md                  human-readable rendering
-├── analysis.meta.json           cache-identity sidecar (rubric sha + model)
-└── analysis.zh.md               Simplified-Chinese translation (--lang zh only)
+├── analysis.json                machine-readable attribution (always English)
+├── analysis.md                  human-readable rendering (language follows --lang)
+└── analysis.meta.json           cache-identity sidecar (rubric sha + model)
 ```
 
 ### `triage check <task_dir>`

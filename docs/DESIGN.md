@@ -41,7 +41,7 @@
 | 结构化输出 | claude harness 经 SDK 的 `output_format: json_schema` 机制（schema 由 rubric 动态编译注入）——SDK 原生强约束，无格式漂移风险 | 已落地 |
 | 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P015）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P015 待办 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
-| 多语言 | `--lang zh` 追加翻译二跳生成 `analysis.zh.md`，英文产物不动 | 已落地 |
+| 多语言 | `--lang zh`：`analysis.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P011 路线 B）；`analysis.json` 恒英文；`analysis.zh.md` 退役 | 已落地 |
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
 | 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——待立项 | 部分实现 |
 | task 目录 | analyze 的降级路径按主路径设计（跨机器拷贝场景 task path 必然失效），支持 `--task-dir` 覆盖 | 已落地 |
@@ -149,7 +149,7 @@ triage analyze <trial_dir> -m deepseek-flash
 # job 级批量归因（--failing 只筛 badcase；空集时零 LLM 调用短路退出）
 triage analyze <job_dir> --failing -m deepseek-flash
 
-# 并发（-j）+ 中文产物（--lang zh，英文产物不动，追加 analysis.zh.md）
+# 并发（-j）+ 中文报告（--lang zh：analysis.md 即中文原生撰写版）
 triage analyze <job_dir> --failing -m deepseek-flash -j 8 --lang zh
 
 # 跨机器拷贝场景：手动覆盖 task 目录位置
@@ -188,18 +188,16 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
 ```
 <job_dir>/                                       ← job 目录
 ├── triage-kit/                                  job 级产物目录
-│   ├── analysis.json                            job 级聚合
-│   ├── analysis.md                              job_summary 文本版
-│   ├── analysis.meta.json                       缓存身份 sidecar
-│   └── analysis.zh.md                           （--lang zh 时）中文翻译版
+│   ├── analysis.json                            job 级聚合（恒英文）
+│   ├── analysis.md                              job_summary 文本版（语言随 --lang）
+│   └── analysis.meta.json                       缓存身份 sidecar
 └── ts-pattern-match-each__9giF4pL/
     ├── result.json                              （原有，只读）
     ├── agent/trajectory.json                    （原有，只读——judge 的证据源）
     └── triage-kit/                             trial 级产物目录
-        ├── analysis.json                        单 trial 归因
-        ├── analysis.md                          人读版
-        ├── analysis.meta.json                  缓存身份 sidecar
-        └── analysis.zh.md                       （--lang zh 时）
+        ├── analysis.json                        单 trial 归因（恒英文）
+        ├── analysis.md                          人读版（语言随 --lang）
+        └── analysis.meta.json                  缓存身份 sidecar
 ```
 
 **check 产物**同规则：`<task_dir>/triage-kit/check-result.json` + `check-result.meta.json`。
@@ -248,8 +246,11 @@ judge 的响应 trial_name 必须与 trial 目录名一致，不一致按失败�
         → analyzer 渲染 prompt（assets 模板 + rubric 编译产物 guidance/schema；
           task 目录可用时挂为 add_dir，不可用时注入降级话术——跨机器拷贝场景这是主路径）
         → backend（claude harness）执行 agent 循环，返回 (result, meta)
-        → schema 校验（trial_name 一致性 + 空值拒绝）→ analysis.json/md/meta 落盘 triage-kit/ 子目录
-          （--lang zh 时追加翻译二跳：一次纯 LLM query 调用，写 analysis.zh.md）
+        → schema 校验（trial_name 一致性 + 空值拒绝）→ analysis.json/meta 落盘 triage-kit/ 子目录
+          （analysis.md 语言随 --lang：en=机械渲染（零 LLM 调用）；
+            zh=中文原生撰写二跳——一次纯 LLM query，输入为结构化 payload
+            （trial 级 analysis.json 内容 / job 级 summary），判定结论与 JSON
+            一致是硬约束，直接落为 analysis.md）
         → job 模式：所有 trial 经有界线程池（-j/--jobs，默认 1=串行 FIFO）→ join 后按目录序折叠
           → 二级聚合（各 trial summary + checks 拼接，无工具纯 LLM 调用）
 ```
@@ -311,7 +312,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **并发无限流调度**：`-j/--jobs` 为固定线程数，无限流自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）；且 worker 为 CLI 子进程，`-j` 过高会吃满机器资源
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
 - **非 Anthropic 官方模型的 meta 缺失**：兼容端点（如 DeepSeek）不回填 token usage，`AgentMeta` 的 token 计数为 None、`analysis.meta.json` 无 token 统计（不影响判定与缓存身份，cost 由 CLI 回填）
-- **中文报告为翻译体**：`--lang zh` 的第二跳是英文报告的翻译（analyzer 内联 prompt），产出翻译腔中文，可读性差——需改为中文原生撰写（P011 立项待办）
+- **中文报告为翻译体**：（P011 已修复并升级为路线 B）曾为英文报告的逐句翻译（`analysis.zh.md` 双文件形态）；现 `--lang zh` 直接以中文原生撰写生成 `analysis.md`（判定与 JSON 一致、标识符保留英文，JSON 契约产物恒英文）
 - **运行日志不落盘**：执行日志仅输出控制台，事后 debug（judge 读了什么/哪一轮失败）无据可查——需随产物持久化到 `triage-kit/`（P013 立项待办）
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐
 - **task 目录跨机失效是主路径**：Linux 产出的 result.json 拷贝到 Windows 后 task path 必然不可解析，task_section 的降级话术（"infer from trajectory"）在跨机场景是常态而非边缘；DeepSWE 样本中 mini-swe-agent 轨迹内嵌完整任务 prompt，降级路径实测可用，但不具普遍性
