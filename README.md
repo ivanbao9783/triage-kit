@@ -4,6 +4,7 @@ Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Ha
 
 - **`triage analyze`** — post-evaluation triage of trial results: filter badcases (`--failing`), attribute each one against a rubric (reward hacking / task specification)
 - **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric): single task or batch over a tasks root (`-j` concurrency, root-level summary)
+- **`triage view`** — local **read-only** web view of the analyze diagnosis products: a trials overview (job aggregate + Reward filter) and a single-trial page (native evaluation blocks + that trial's report)
 - **`triage clean`** — restore evaluated directories by removing all `triage-kit/` product directories (dry-run by default)
 
 triage-kit is an **independently runnable** toolkit powered by the Claude Agent SDK — reaching both Anthropic's own models and Anthropic-compatible endpoints (e.g. DeepSeek via `ANTHROPIC_BASE_URL`). Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte). Design document: [docs/DESIGN.md](docs/DESIGN.md).
@@ -25,6 +26,10 @@ triage analyze outputs/xxx/details --failing --model deepseek-flash
 
 # 4. inspect the products
 cat outputs/xxx/details/triage-kit/analysis.md   # overview (aggregated verdicts)
+
+# 4b. or open them in the read-only web viewer (needs the [viewer] extra)
+pip install -e '.[viewer]'
+triage view outputs/xxx/details --port 8137       # overview page; click through to any trial
 
 # 5. restore the evaluated directory when done
 triage clean outputs/xxx/details         # dry-run: just list
@@ -50,9 +55,10 @@ cat path/to/tasks/triage-kit/check-summary.json   # deterministic totals
 ```bash
 pip install -r requirements.txt   # one-click: runtime + dev (pytest)
 pip install -e .                  # runtime only
+pip install -e '.[viewer]'        # + the optional viewer (fastapi/uvicorn/jinja2/markdown-it-py)
 ```
 
-Requires Python 3.11+. The claude-agent-sdk dependency bundles the Claude Code CLI, so no separate Node/npm install is needed. The editable install keeps the `assets/` tree next to the package (see [docs/DESIGN.md](docs/DESIGN.md) for the packaging boundary).
+Requires Python 3.11+. The claude-agent-sdk dependency bundles the Claude Code CLI, so no separate Node/npm install is needed. The editable install keeps the `assets/` tree next to the package (see [docs/DESIGN.md](docs/DESIGN.md) for the packaging boundary). The viewer is an optional extra — `triage analyze`/`check`/`clean` work without it, and `triage view` prints the exact install command when the extra is missing.
 
 ## CLI reference
 
@@ -111,6 +117,21 @@ Products (all in place, in `triage-kit/` subdirectories):
 
 Batch mode folds failures instead of aborting: a failed task is reported with an ERROR log line and lands in `failed_tasks`; sibling tasks continue and their products persist normally. The summary is pure mechanical counting — zero LLM calls.
 
+### `triage view <trial_dir | job_dir>`
+
+Local **read-only** web viewer for the analyze diagnosis products. Zero build: a FastAPI + Jinja2 server renders HTML server-side (no npm/bun/vite) and there is no write path — judging always stays in the CLI.
+
+| Option | Description |
+|---|---|
+| `--host <addr>` | Bind host (default: `127.0.0.1`) |
+| `-p, --port <n>` | Bind port (default: `8000`) |
+
+Two shapes mirror `triage analyze`: a **trials root** serves an overview page (`/`) — the job-level aggregate `analysis.md` plus a trials table (name, reward, diagnosis present) with a server-side **Reward filter** (`?reward=1|0`) — and each row links to a single-trial page (`/trial/<name>`); a **single trial** renders that trial page directly at `/`.
+
+Each trial page shows the **native** evaluation blocks (outcome/f2p/p2p/partial, tokens & cost, phase timing, verifier ctrf summary + failed tests, exception, artifacts manifest) followed by that trial's `analysis.md`. The diagnosis section **degrades to a hint** when a directory has no `triage-kit/` products, so raw evaluation results can be passed straight in — the native side renders either way.
+
+Requires the `[viewer]` extra (`pip install -e '.[viewer]'`). The entry point is analyze (trials); a tasks directory is rejected with an explicit "check mode not yet supported" error (the check/tasks view is a later landing of the same feature).
+
 ### `triage clean <path>`
 
 | Option | Description |
@@ -121,7 +142,7 @@ Restores evaluated directories to their pre-triage state: recursively finds and 
 
 ### Single-item flows
 
-Both commands also accept single-item targets — useful for a quick look at one badcase or one task:
+The commands also accept single-item targets — useful for a quick look at one badcase or one task:
 
 ```bash
 # one trial: analyze just this badcase (no job-level aggregation,
@@ -130,6 +151,9 @@ triage analyze outputs/xxx/details/some-trial__abc123 --model deepseek-flash
 
 # one task: check a single task directory (task.toml required)
 triage check path/to/tasks/fix-the-bug --model deepseek-flash
+
+# one trial: view just this trial's page
+triage view outputs/xxx/details/some-trial__abc123
 ```
 
 Single-trial analysis produces trial-level products only; the job-level aggregation summary is not generated.
@@ -191,8 +215,10 @@ pre-development gate.
 
 ```bash
 pip install -r requirements.txt
-pytest                    # 162 tests, no network access needed
+pytest                    # 201 tests, no network access needed
 ```
+
+The viewer tests use `fastapi.testclient` (part of the `dev` extra) and need the `viewer` extra installed.
 
 ## License
 

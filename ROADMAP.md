@@ -16,7 +16,7 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P003 | Parallel trial analysis (`-j/--jobs`) | optimization | high | landed | [P003-parallel-analysis.md](docs/proposals/P003-parallel-analysis.md) |
 | P004 | Multi-step per-step check expansion | feature | low | proposed | [P004-multi-step-check.md](docs/proposals/P004-multi-step-check.md) |
 | P005 | Deterministic contract pre-check layer | feature | medium | proposed | [P005-contract-precheck.md](docs/proposals/P005-contract-precheck.md) |
-| P006 | Diagnosis results viewer | feature | medium | accepted | [P006-diagnosis-viewer.md](docs/proposals/P006-diagnosis-viewer.md) |
+| P006 | Diagnosis results viewer | feature | medium | landed | [P006-diagnosis-viewer.md](docs/proposals/P006-diagnosis-viewer.md) |
 | P007 | Model identity in job aggregation | feature | low | proposed | [P007-model-identity.md](docs/proposals/P007-model-identity.md) |
 | P008 | Single-item flows: verification + documentation | docs | low | landed | [P008-single-item-flows-docs.md](docs/proposals/P008-single-item-flows-docs.md) |
 | P009 | Native Chinese reports (`--lang` selects `analysis.md` language) | optimization | medium | landed | [P009-native-zh-reports.md](docs/proposals/P009-native-zh-reports.md) |

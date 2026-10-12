@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Trials — triage viewer{% endblock %}
+{% block crumbs %} / <span>trials · {{ root_name }}</span>{% endblock %}
+{% block body %}
+
+<h1>{{ root_name }}</h1>
+<p class="kv muted">输入目录：<code>{{ root }}</code> · 模式：<b>analyze</b>（trials）</p>
+
+<h2>① 全景分析结果（job 聚合）</h2>
+{% if job_md %}
+<div class="card md">{{ job_md | safe }}</div>
+{% else %}
+<div class="card muted">
+  未找到根目录聚合分析（<code>triage-kit/analysis.md</code> 不存在）。
+  在 job 级运行 <code>triage analyze {{ root_name }}</code> 后即可补齐。
+</div>
+{% endif %}
+
+<h2>② Trials（{{ trials | length }}）</h2>
+<div class="filters">
+  Reward 筛选：
+  <a href="/" class="{{ 'active' if reward_sel is none else '' }}">全部 ({{ counts.all }})</a>
+  <a href="/?reward=1" class="{{ 'active' if reward_sel == '1' else '' }}">= 1 ({{ counts['1'] }})</a>
+  <a href="/?reward=0" class="{{ 'active' if reward_sel == '0' else '' }}">= 0 ({{ counts['0'] }})</a>
+</div>
+<div class="card" style="padding:0">
+  <table>
+    <thead>
+      <tr>
+        <th>Trial</th>
+        <th>Reward</th>
+        <th>诊断</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in trials %}
+      <tr>
+        <td><a href="/trial/{{ t.name }}">{{ t.name }}</a></td>
+        <td>
+          {% if t.reward is none %}
+          <span class="muted">—</span>
+          {% else %}
+          <span class="badge {{ 'pass' if t.reward == 1 else 'fail' }}">{{ t.reward }}</span>
+          {% endif %}
+        </td>
+        <td>{% if t.has_diagnosis %}<span class="badge pass">有</span>{% else %}<span class="muted">无</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

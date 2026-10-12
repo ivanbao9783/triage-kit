@@ -1,4 +1,4 @@
-# One-click install (runtime + dev). The single dependency source of
-# truth is pyproject.toml; this file only exists for the
+# One-click install (runtime + dev + viewer). The single dependency
+# source of truth is pyproject.toml; this file only exists for the
 # `pip install -r requirements.txt` workflow.
--e .[dev]
+-e .[dev,viewer]

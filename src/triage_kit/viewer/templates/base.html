@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}triage viewer{% endblock %}</title>
+  <style>
+    :root {
+      --pass: #16a34a;
+      --fail: #dc2626;
+      --na: #6b7280;
+      --line: #e5e7eb;
+      --muted: #6b7280;
+      --bg: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      margin: 0;
+      color: #111827;
+      background: var(--bg);
+    }
+
+    a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    header.top {
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      padding: .7rem 1.5rem;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      margin: .2rem 0 .4rem;
+    }
+
+    h2 {
+      font-size: 1rem;
+      margin: 1.8rem 0 .6rem;
+      padding-bottom: .3rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: .85rem;
+      margin: .2rem 0 .8rem;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    code {
+      background: #f1f5f9;
+      padding: .05rem .3rem;
+      border-radius: 4px;
+      font-size: .85em;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 1rem;
+    }
+
+    .grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: .45rem .6rem;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      font-size: .88rem;
+    }
+
+    th {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      color: var(--muted);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td.name {
+      font-family: ui-monospace, monospace;
+      white-space: nowrap;
+      font-size: .82rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: .12rem .5rem;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .pass {
+      background: var(--pass)
+    }
+
+    .fail {
+      background: var(--fail)
+    }
+
+    .not_applicable {
+      background: var(--na)
+    }
+
+    .kv {
+      font-size: .9rem;
+      color: #374151;
+      margin: .35rem 0;
+    }
+
+    .kv b {
+      color: #111827;
+    }
+
+    .muted {
+      color: var(--muted)
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: .8rem 1rem;
+      border-radius: 8px;
+      overflow: auto;
+      font-size: .8rem;
+      line-height: 1.5;
+      max-height: 420px;
+    }
+
+    .md {
+      line-height: 1.65;
+      font-size: .9rem;
+    }
+
+    .md h1 {
+      font-size: 1.1rem;
+    }
+
+    .md h2 {
+      font-size: .98rem;
+      border: 0;
+      margin: 1rem 0 .3rem;
+    }
+
+    .md h3 {
+      font-size: .9rem;
+      text-transform: none;
+      letter-spacing: 0;
+      margin: .9rem 0 .3rem;
+    }
+
+    .md table {
+      margin: .6rem 0;
+    }
+
+    .md td,
+    .md th {
+      font-size: .85rem;
+    }
+
+    details summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: .85rem;
+    }
+
+    .filters {
+      margin: .1rem 0 .8rem;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+
+    .filters a {
+      display: inline-block;
+      padding: .18rem .6rem;
+      margin-right: .4rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+    }
+
+    .filters a.active {
+      background: #111827;
+      color: #fff;
+      border-color: #111827;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="top"><a href="/">triage viewer</a>{% block crumbs %}{% endblock %}</header>
+  <main>{% block body %}{% endblock %}</main>
+</body>
+
+</html>

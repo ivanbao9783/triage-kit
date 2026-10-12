@@ -1,6 +1,6 @@
 # P006 — Diagnosis results viewer
 
-Status: **accepted** (2026-10-12) · Type: feature · Priority: medium
+Status: **landed** (2026-10-12) · Type: feature · Priority: medium
 
 ## Background & motivation
 
@@ -111,14 +111,23 @@ follows `--lang`, so it renders as stored.
 
 ## Verification plan
 
-- TDD for scanner logic (product discovery, missing-file tolerance).
-- Live verification: serve the `details` sample job (2 trials, real
-  products) + one checked task; assert rendered content against the
-  JSON products.
+- TDD for scanner logic (product discovery, missing-file tolerance) —
+  `tests/test_viewer_scanner.py`; routes via `fastapi.testclient` —
+  `tests/test_viewer_server.py`; CLI wiring — `tests/test_cli.py`.
+- Live verification: serve the P015 mini set
+  (`tests/e2e/data/trial_results`, 3 trials with zh products) and
+  assert both pages, the Reward filter, and click-through; then serve
+  a raw results directory (no `triage-kit/`) and assert the native side
+  renders while the diagnosis area shows the degradation notice.
+- Packaging: build the wheel and confirm `viewer/templates/*` is
+  included.
 
 ## Status & links
 
 - Proposed 2026-10-09. Gate 1 accepted 2026-10-12 (user-confirmed
   D1–D8; validated by a zero-build prototype against real products).
-  Reference: the upstream evaluation framework's viewer module
+  Gate 2 landed 2026-10-12: TDD scanner/server/CLI suite added (39 new
+  tests, 201 total green), live E2E on the P015 mini set + the raw-data
+  degradation path, wheel verified to carry the templates; DESIGN/README
+  synced. Reference: the upstream evaluation framework's viewer module
   (FastAPI server, task_scanner, bun-built frontend).

@@ -734,3 +734,110 @@ class TestRunLogPersistence:
 
         assert result.exit_code != 0
         assert not (empty / "triage-kit").exists()
+
+
+class TestViewCommand:
+    """P006: `triage view` — 只读 SSR viewer。serve 被 monkeypatch 隔离
+    uvicorn 与网络，只验证 CLI 侧的路径校验、模式路由与依赖提示。"""
+
+    @staticmethod
+    def _spy(monkeypatch, captured):
+        import triage_kit.viewer.server as server_mod
+
+        def fake_serve(root, *, host, port):
+            captured.update(root=Path(root), host=host, port=port)
+
+        monkeypatch.setattr(server_mod, "serve", fake_serve)
+
+    @staticmethod
+    def _combined(result):
+        return result.output + (result.stderr or "")
+
+    def test_job_dir_starts_serve(self, tmp_path, monkeypatch):
+        from triage_kit.cli import app
+
+        make_trial(tmp_path / "a__1", reward=1.0)
+        make_trial(tmp_path / "b__2", reward=0.0)
+        captured = {}
+        self._spy(monkeypatch, captured)
+
+        result = runner.invoke(app, ["view", str(tmp_path), "--port", "8123"])
+
+        assert result.exit_code == 0, result.output
+        assert captured["root"] == tmp_path
+        assert captured["port"] == 8123
+        assert captured["host"] == "127.0.0.1"
+        assert "8123" in result.output
+
+    def test_single_trial_dir_starts_serve(self, tmp_path, monkeypatch):
+        from triage_kit.cli import app
+
+        trial = tmp_path / "a__1"
+        make_trial(trial, reward=1.0)
+        captured = {}
+        self._spy(monkeypatch, captured)
+
+        result = runner.invoke(app, ["view", str(trial)])
+
+        assert result.exit_code == 0, result.output
+        assert captured["root"] == trial
+
+    def test_tasks_dir_rejected_with_check_mode_message(
+        self, tmp_path, monkeypatch
+    ):
+        from triage_kit.cli import app
+
+        make_task(tmp_path / "task-a")
+        captured = {}
+        self._spy(monkeypatch, captured)
+
+        result = runner.invoke(app, ["view", str(tmp_path)])
+
+        assert result.exit_code != 0
+        assert "check mode" in self._combined(result)
+        assert captured == {}  # never reached serve
+
+    def test_invalid_port_rejected(self, tmp_path, monkeypatch):
+        from triage_kit.cli import app
+
+        make_trial(tmp_path / "a__1", reward=1.0)
+        captured = {}
+        self._spy(monkeypatch, captured)
+
+        result = runner.invoke(app, ["view", str(tmp_path), "--port", "0"])
+
+        assert result.exit_code != 0
+        assert "--port" in self._combined(result)
+
+    def test_missing_path_errors(self, tmp_path):
+        from triage_kit.cli import app
+
+        result = runner.invoke(app, ["view", str(tmp_path / "nope")])
+
+        assert result.exit_code != 0
+        assert "path not found" in self._combined(result)
+
+    def test_file_path_errors(self, tmp_path):
+        from triage_kit.cli import app
+
+        f = tmp_path / "afile.txt"
+        f.write_text("x", encoding="utf-8")
+
+        result = runner.invoke(app, ["view", str(f)])
+
+        assert result.exit_code != 0
+        assert "not a directory" in self._combined(result)
+
+    def test_missing_extra_hint(self, tmp_path, monkeypatch):
+        """缺 [viewer] 依赖 → 明确提示安装 extra，而非 traceback。"""
+        import sys
+
+        from triage_kit.cli import app
+
+        make_trial(tmp_path / "a__1", reward=1.0)
+        monkeypatch.setitem(sys.modules, "triage_kit.viewer.server", None)
+
+        result = runner.invoke(app, ["view", str(tmp_path)])
+
+        assert result.exit_code != 0
+        assert "triage-kit[viewer]" in self._combined(result)

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} — triage viewer{% endblock %}
+{% block crumbs %} / {% if not single %}<a href="/">trials</a> / {% endif %}<span>{{ name }}</span>{% endblock %}
+{% block body %}
+
+<h1>{{ name }}</h1>
+<p class="kv muted">{{ task_name }} · {{ agent_name }} · <code>{{ model }}</code></p>
+
+<h2>① 原生侧信息</h2>
+
+<div class="grid">
+  <div class="card">
+    <h3>Outcome</h3>
+    <p>
+      {% if rewards.reward is none %}<span class="badge fail">no reward</span>
+      {% else %}<span class="badge {{ 'pass' if rewards.reward == 1 else 'fail' }}">reward {{ rewards.reward }}</span>{%
+      endif %}
+      {% if exception.exception_type %}<span class="badge fail">{{ exception.exception_type }}</span>{% endif %}
+    </p>
+    <table>
+      <tr>
+        <td>f2p</td>
+        <td>{{ rewards.f2p_passed | fmt }} / {{ rewards.f2p_total | fmt }}</td>
+      </tr>
+      <tr>
+        <td>p2p</td>
+        <td>{{ rewards.p2p_passed | fmt }} / {{ rewards.p2p_total | fmt }}</td>
+      </tr>
+      <tr>
+        <td>partial</td>
+        <td>{{ rewards.partial | fmt(4) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Tokens &amp; Cost</h3>
+    <table>
+      <tr>
+        <td>Input tokens</td>
+        <td>{{ tokens.input | fmt }}</td>
+      </tr>
+      <tr>
+        <td>Cache tokens</td>
+        <td>{{ tokens.cache | fmt }}</td>
+      </tr>
+      <tr>
+        <td>Output tokens</td>
+        <td>{{ tokens.output | fmt }}</td>
+      </tr>
+      <tr>
+        <td>Cost USD</td>
+        <td>{{ tokens.cost | fmt(4) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Timing</h3>
+    <table>
+      {% for p in timing %}<tr>
+        <td>{{ p.label }}</td>
+        <td>{{ p.sec | secs }}</td>
+      </tr>{% endfor %}
+      <tr>
+        <td><b>Total</b></td>
+        <td><b>{{ total_sec | secs }}</b></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Verifier</h3>
+  {% if ctrf.summary %}
+  <p class="kv">tool <code>{{ ctrf.tool.name }}</code> · tests <b>{{ ctrf.summary.tests }}</b>
+    · passed <b>{{ ctrf.summary.passed }}</b> · failed <b>{{ ctrf.summary.failed }}</b></p>
+  {% else %}
+  <p class="kv muted">无 ctrf 报告</p>
+  {% endif %}
+  {% if ctrf.tests %}
+  {% set failed = ctrf.tests | selectattr('status', 'equalto', 'failed') | list %}
+  {% if failed %}
+  <details>
+    <summary>{{ failed | length }} failed tests</summary>
+    <table>
+      <tbody>
+        {% for t in failed[:15] %}<tr>
+          <td class="name">{{ t.name }}</td>
+        </tr>{% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% if exception.exception_type %}
+<div class="card">
+  <h3>Exception</h3>
+  <p class="kv"><span class="badge fail">{{ exception.exception_type }}</span>
+    <span class="muted">occurred_at {{ exception.occurred_at }}</span>
+  </p>
+  <details>
+    <summary>message</summary>
+    <pre>{{ exception.exception_message or '' }}</pre>
+  </details>
+  {% if exception.exception_traceback %}
+  <details>
+    <summary>traceback</summary>
+    <pre>{{ exception.exception_traceback }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Artifacts</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Destination</th>
+        <th>Type</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in manifest %}
+      <tr>
+        <td class="name">{{ a.source }}</td>
+        <td class="name">{{ a.destination }}</td>
+        <td>{{ a.type }}</td>
+        <td>{{ a.status }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="muted">无 manifest</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>② 诊断侧（analyze）</h2>
+{% if analysis_md %}
+<div class="card md">{{ analysis_md | safe }}</div>
+{% else %}
+<div class="card muted">
+  无诊断产物（<code>triage-kit/analysis.md</code> 不存在）。运行
+  <code>triage analyze</code> 后可补齐诊断渲染。
+</div>
+{% endif %}
+
+{% endblock %}

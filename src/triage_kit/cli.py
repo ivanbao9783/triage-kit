@@ -1,5 +1,5 @@
-"""triage CLI: `triage analyze` (badcase attribution) + `triage check`
-(task quality inspection).
+"""triage CLI: `triage analyze` (badcase attribution), `triage check`
+(task quality inspection) and `triage view` (read-only results viewer).
 
 Backend selection: 'claude' (Claude Agent SDK — also reaches
 Anthropic-compatible endpoints such as DeepSeek via ANTHROPIC_BASE_URL).
@@ -331,6 +331,53 @@ def clean(
             f"{len(targets)} product directory(ies) found — dry run, "
             f"pass --yes to delete."
         )
+
+
+@app.command()
+def view(
+    path: Path = typer.Argument(
+        ..., help="Trial directory or job directory (analyze products). "
+                  "Tasks directories are not supported yet."
+    ),
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Host to bind the local viewer to."
+    ),
+    port: int = typer.Option(
+        8000, "--port", "-p", help="Port to bind the local viewer to."
+    ),
+) -> None:
+    """Serve a local read-only web view of analyze diagnosis results."""
+    if not 1 <= port <= 65535:
+        _fail(f"--port must be between 1 and 65535, got {port}")
+
+    path = Path(path)
+    if not path.exists():
+        _fail(f"path not found: {path}")
+    if not path.is_dir():
+        _fail(f"not a directory: {path}")
+
+    from triage_kit.viewer import scanner
+
+    try:
+        mode = scanner.detect_mode(path)
+    except ValueError as e:
+        _fail(str(e))
+        return
+
+    try:
+        from triage_kit.viewer.server import serve
+    except ImportError:
+        _fail(
+            "the viewer requires optional dependencies — install them "
+            "with: pip install 'triage-kit[viewer]'"
+        )
+        return
+
+    typer.echo(
+        f"triage view — {mode} mode · http://{host}:{port} "
+        f"(Ctrl+C to stop)"
+    )
+    serve(path, host=host, port=port)
 
 
 if __name__ == "__main__":
