@@ -10,6 +10,7 @@ are identical for any j over the same trial set; per-trial failures are
 collected (never raised out of a worker) and reported via failed_trials.
 """
 
+import contextlib
 import contextvars
 import json
 import logging
@@ -23,19 +24,20 @@ from triage_kit.core.schema import build_analyze_response_schema
 
 logger = logging.getLogger(__name__)
 
-# Current trial for log attribution in job mode (P003). ContextVars are
-# per-thread: each pool worker sees only its own value, so concurrent
-# trials cannot leak into each other's log context.
-_current_trial: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "triage_current_trial", default=None
+# Current item (trial in analyze-job mode, task in check-batch mode) for
+# log attribution under concurrency (P003; shared by P014). ContextVars
+# are per-thread: each pool worker sees only its own value, so concurrent
+# items cannot leak into each other's log context.
+_current_item: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "triage_current_item", default=None
 )
 _prefix_installed = False
 
 
-def install_trial_log_prefix() -> None:
-    """Prefix triage_kit log records with the current trial name.
+def install_item_log_prefix() -> None:
+    """Prefix triage_kit log records with the current item name.
 
-    Concurrent workers interleave their log output; a per-trial prefix
+    Concurrent workers interleave their log output; a per-item prefix
     keeps every line attributable. Implemented as a LogRecord factory
     (runs at record creation) so records emitted by ANY triage_kit
     logger get prefixed, no matter which handler ships them. Idempotent.
@@ -47,13 +49,27 @@ def install_trial_log_prefix() -> None:
 
     def prefixed_factory(*args, **kwargs):
         record = base(*args, **kwargs)
-        trial = _current_trial.get()
-        if trial is not None and record.name.startswith("triage_kit"):
-            record.msg = f"[{trial}] {record.msg}"
+        item = _current_item.get()
+        if item is not None and record.name.startswith("triage_kit"):
+            record.msg = f"[{item}] {record.msg}"
         return record
 
     logging.setLogRecordFactory(prefixed_factory)
     _prefix_installed = True
+
+
+@contextlib.contextmanager
+def log_item_scope(name: str):
+    """Bind the current item name for log attribution (see above).
+
+    Pool workers enter this scope around one item so their log records
+    carry the [item_name] prefix.
+    """
+    token = _current_item.set(name)
+    try:
+        yield
+    finally:
+        _current_item.reset(token)
 
 # All products live in this subdirectory next to the trial/job data,
 # so triage output never scatters into the evaluated directories.
@@ -64,7 +80,9 @@ _DEGRADED_TASK_SECTION = (
     "Use the trajectory and test output to infer what the task required."
 )
 
-_ZH_COMPOSE_RULES = (
+# Shared zh-composition rules block (P009 route B). Public: the Checker
+# reuses it for check-result.md composition (P014 D3).
+ZH_COMPOSE_RULES = (
     "你是一名资深评测诊断工程师。请基于下方提供的诊断材料，"
     "用中文撰写一份诊断报告。\n"
     "要求：\n"
@@ -76,14 +94,14 @@ _ZH_COMPOSE_RULES = (
     "4. 仅输出 Markdown 正文，无前言、无解释、无代码围栏。\n"
 )
 
-_ZH_TRIAL_COMPOSE = _ZH_COMPOSE_RULES + (
+_ZH_TRIAL_COMPOSE = ZH_COMPOSE_RULES + (
     "报告结构（与英文版 analysis.md 同构）：\n"
     "一级标题「# 分析：{trial_name}」→ 中文总述段 → "
     "每个判据一节「## {判据名}: {outcome}」，节内为该判据的中文论述。\n"
     "\n诊断材料（JSON）：\n\n"
 )
 
-_ZH_JOB_COMPOSE = _ZH_COMPOSE_RULES + (
+_ZH_JOB_COMPOSE = ZH_COMPOSE_RULES + (
     "报告结构（与英文版 analysis.md 同构）：\n"
     "一级标题「# 作业级分析」→ 中文综述正文。\n"
     "\n诊断材料（job 综述）：\n\n"
@@ -224,14 +242,12 @@ class Analyzer:
         Never raises — failures travel back as the third tuple element
         and are reported (and folded into failed_trials) after the join.
         """
-        token = _current_trial.set(trial_dir.name)
-        try:
-            analysis = self.analyze_trial(trial_dir)
-            return trial_dir.name, analysis, None
-        except Exception as exc:
-            return trial_dir.name, None, exc
-        finally:
-            _current_trial.reset(token)
+        with log_item_scope(trial_dir.name):
+            try:
+                analysis = self.analyze_trial(trial_dir)
+                return trial_dir.name, analysis, None
+            except Exception as exc:
+                return trial_dir.name, None, exc
 
     def analyze_job(self, job_dir: Path, *, failing_only: bool = False) -> dict:
         job_dir = Path(job_dir)

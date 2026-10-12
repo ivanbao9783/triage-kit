@@ -1,6 +1,10 @@
 # P014 — check batch mode & human-readable products
 
-Status: **proposed** · Type: feature · Priority: medium
+Status: **building** · Type: feature · Priority: medium
+(Gate 1 passed 2026-10-12; D1–D4 below are user-confirmed.
+Implementation landed same day — full regression 156 green (137
+baseline + 19 new); live E2E on `deep-swe/tasks/` folds into the next
+unified E2E run, closing Gate 2.)
 
 ## Background & motivation
 
@@ -52,32 +56,40 @@ command surfaces. Two gaps surfaced, both on the check side:
 
 ## Design
 
-**To be finalized at Gate 1.** Candidate shape:
+**Gate 1 decisions (2026-10-12, user-confirmed D1–D4):**
 
-- **Batch detection**: if the CLI argument is not itself a valid
-  task dir, scan it for child task dirs (a `tasks/` root or any
-  directory of task dirs); if none found, fail with the current
-  error. Single-task and batch share one command (analyze's
-  trial/job dual-form precedent).
-- **Concurrency**: reuse the P003 pattern —
-  `ThreadPoolExecutor(max_workers=j)` around a `_check_one`
-  worker that never raises (returns `(name, result, exc)`),
-  results folded in listing order; `[task_name]` log prefixes via
-  the existing contextvar + LogRecord factory.
-- **Run log**: batch mode lands one `run.log` at the root
-  argument dir (analyze job-mode precedent); single-task mode
-  keeps the current per-task log.
-- **md rendering**: `_render_check_md` (mechanical, en) mirroring
-  `_render_analysis_md`; zh via a `_ZH_CHECK_COMPOSE` instruction
-  (payload = check-result JSON, same rules block as P009).
-- **Cache**: per-task cache identity unchanged; cache hits skip
-  the compose hop (P009 decision (i) precedent — `--force`
-  regenerates).
-
-Open questions for Gate 1: recursive vs one-level task scan (or
-`--recursive` flag); whether batch mode also writes a root-level
-summary listing pass/fail counts (light, no LLM) or strictly
-per-task products.
+- **D1 — Batch detection: single command, dual form; one-level
+  scan, no `--recursive`.** If the CLI argument is itself a valid
+  task dir (has `task.toml`), run the single-task form (current
+  behavior unchanged). Otherwise scan its immediate
+  subdirectories for task dirs (child contains `task.toml`); ≥1
+  found → batch mode; 0 found → current "not a task dir" error.
+  Mirrors analyze's trial/job dual form; nested task trees are
+  YAGNI until they actually appear.
+- **D2 — Root-level summary: yes, deterministic, zero LLM.**
+  Batch mode writes `<root>/triage-kit/check-summary.json`:
+  `total / checked / cached / failed`, `per_criterion`
+  pass/fail/not_applicable counts, and `failed_tasks` names.
+  Mechanical counting only — serves the CI-gate preference
+  (deterministic, low-latency metrics); LLM aggregation across
+  tasks, if ever wanted, is a separate future entry. Run log
+  lands once at `<root>/triage-kit/run.log` (analyze job-mode
+  precedent); single-task mode keeps the per-task log.
+- **D3 — md skeleton mirrors `analysis.md`.** `# 任务质检：
+  {task_name}` → one `## {criterion}: {outcome}` section per
+  check with its explanation. `--lang` semantics identical to
+  analyze: `en` (default) mechanically renders from JSON (zero
+  LLM); `zh` runs a compose hop (`_ZH_COMPOSE_RULES` shared
+  rules block + a `_ZH_CHECK_COMPOSE` skeleton instruction,
+  payload = check-result JSON); JSON stays English; cache hits
+  skip the compose hop (P009 decision (i) precedent).
+- **D4 — Failure folding mirrors P003.** `_check_one` worker
+  never raises (returns `(name, result, exc)`); results folded
+  in directory-listing order regardless of completion order;
+  `[task_name]` log prefixes via the existing contextvar +
+  LogRecord factory; failed tasks get ERROR logs with task name
+  + exception, land in `failed_tasks`, and never abort the
+  batch — surviving tasks' products persist normally.
 
 ## Compatibility impact
 

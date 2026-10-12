@@ -3,7 +3,7 @@
 Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Harbor-ecosystem agent evaluation.
 
 - **`triage analyze`** — post-evaluation triage of trial results: filter badcases (`--failing`), attribute each one against a rubric (reward hacking / task specification)
-- **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric)
+- **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric): single task or batch over a tasks root (`-j` concurrency, root-level summary)
 - **`triage clean`** — restore evaluated directories by removing all `triage-kit/` product directories (dry-run by default)
 
 triage-kit is an **independently runnable** toolkit powered by the Claude Agent SDK — reaching both Anthropic's own models and Anthropic-compatible endpoints (e.g. DeepSeek via `ANTHROPIC_BASE_URL`). Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte). Design document: [docs/DESIGN.md](docs/DESIGN.md).
@@ -36,8 +36,13 @@ Use `--lang zh` to get `analysis.md` natively composed in Simplified Chinese (de
 For task quality inspection before running an evaluation:
 
 ```bash
-triage check path/to/tasks --model deepseek-flash
-cat path/to/tasks/triage-kit/check-result.json
+# one task (task.toml required) — products in <task>/triage-kit/
+triage check path/to/tasks/fix-the-bug --model deepseek-flash
+cat path/to/tasks/fix-the-bug/triage-kit/check-result.md
+
+# batch: check every task directory one level under the root
+triage check path/to/tasks --model deepseek-flash -j 4
+cat path/to/tasks/triage-kit/check-summary.json   # deterministic totals
 ```
 
 ## Installation
@@ -75,7 +80,9 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 └── run.log                      execution log of the run (always DEBUG, overwritten per run)
 ```
 
-### `triage check <task_dir>`
+### `triage check <task_dir | tasks_root>`
+
+Single task (the argument contains `task.toml`) or batch (every task directory one level under the argument; a one-level scan, no `--recursive`).
 
 | Option | Description |
 |---|---|
@@ -83,9 +90,26 @@ All products are written in place, into a `triage-kit/` subdirectory next to the
 | `--backend claude` | Backend selection (default: `claude`; more backends planned) |
 | `-m, --model <name>` | Model name (default: `sonnet`; pass e.g. `deepseek-flash` when using `ANTHROPIC_BASE_URL`) |
 | `-f, --force` | Re-check even if cached `triage-kit/check-result.json` exists (overwrites) |
+| `--lang en\|zh` | Report language for `check-result.md` (default: `en`; `zh` = natively composed Chinese, `check-result.json` stays English) |
+| `-j, --jobs <n>` | Concurrent task checks in batch mode (default: `1` = sequential; single-task check is never pooled) |
 | `-v, --verbose` | Debug logging |
 
-Product: `triage-kit/check-result.json` (+ `check-result.meta.json` sidecar + `run.log`) in the task directory.
+Products (all in place, in `triage-kit/` subdirectories):
+
+```
+<task_dir>/triage-kit/
+├── check-result.json             machine-readable verdict (always English)
+├── check-result.md               human-readable rendering (language follows --lang)
+├── check-result.meta.json        cache-identity sidecar (rubric sha + model)
+└── run.log                       execution log (single-task mode)
+
+<tasks_root>/triage-kit/          (batch mode)
+├── check-summary.json            deterministic totals: total/checked/cached/failed,
+│                                 per_criterion pass/fail/not_applicable, failed_tasks
+└── run.log                       execution log ([task_name]-prefixed under -j)
+```
+
+Batch mode folds failures instead of aborting: a failed task is reported with an ERROR log line and lands in `failed_tasks`; sibling tasks continue and their products persist normally. The summary is pure mechanical counting — zero LLM calls.
 
 ### `triage clean <path>`
 
@@ -167,7 +191,7 @@ pre-development gate.
 
 ```bash
 pip install -r requirements.txt
-pytest                    # 137 tests, no network access needed
+pytest                    # 156 tests, no network access needed
 ```
 
 ## License

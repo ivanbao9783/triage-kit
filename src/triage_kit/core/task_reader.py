@@ -33,6 +33,27 @@ def detect_steps(path: Path) -> list[Path]:
     )
 
 
+def is_task_dir(path: Path) -> bool:
+    """A task directory is any directory containing task.toml (P014 D1)."""
+    return (Path(path) / "task.toml").is_file()
+
+
+def list_task_dirs(root: Path) -> list[Path]:
+    """One-level scan for task directories (P014 D1).
+
+    Only direct subdirectories containing task.toml are discovered —
+    grandchild tasks are out of scope (no --recursive) and non-task
+    directories are ignored. Order is lexicographical, which pins the
+    batch summary order regardless of completion order.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    return sorted(
+        d for d in root.iterdir() if d.is_dir() and is_task_dir(d)
+    )
+
+
 def render_file_tree(path: Path, *, max_depth: int | None = None,
                      max_entries: int | None = None,
                      exclude: set[str] | None = None) -> str:

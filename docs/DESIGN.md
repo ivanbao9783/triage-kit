@@ -1,7 +1,7 @@
 # triage-kit 设计文档
 
 > 从 Harbor 生态评测工具链解耦的独立评测结果归因 + 任务质检工具包（资产源自 Harbor 生态）
-> 状态：**as-built 架构快照（已实现）** | v4：2026-10-10（P012 后端收敛为 claude 单后端后重构；v3 为双后端快照，已废止）
+> 状态：**as-built 架构快照（已实现）** | v5：2026-10-12（P014 check 批量模式 + 人读产物并入；v4 为 P012 后端收敛快照）
 
 ---
 
@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：CLI 三命令（analyze / check / clean）可用，137 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。
+**项目现状**：CLI 三命令（analyze / check / clean）可用，156 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。check 侧批量模式 + 人读产物（P014）已实现（live E2E 并入下次统一 E2E）。
 
 ---
 
@@ -36,12 +36,13 @@
 | 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；**claude harness 单后端**（Claude Agent SDK，原上游 backend.py 移植；工具循环/上下文/结构化输出全由 SDK 承担）；trae harness 规划为 skill 形态，**不作为 CLI 选项**；codex / DeepSeek harness SDK 为规划后端（P012） | 已落地 |
 | Harbor 兼容 | 朴素 JSON 读取替代 TrialResult，原生支持（真实样本验证过字段布局，含 f2p/p2p/partial 细分透传） | 已落地 |
 | check 融合 | check 与 analyze 共享契约/schema 管线/两个 harness，引擎零新增——仅 `task_reader` + `checker` 编排 + `triage check` 子命令 | 已落地 |
+| check 批量与人读产物 | 单命令双形态（参数含 task.toml → 单任务；否则一层扫描子目录，≥1 task → 批量，0 → 报错）；批量写根级 `check-summary.json`（确定性计数零 LLM）+ 根级 run.log；`-j` 并发复用 P003 池模式（失败折叠、目录序、`[task_name]` 前缀）；每 task 产 `check-result.md`（`--lang` 语义与 analyze 一致：en 机械渲染 / zh 原生撰写，JSON 恒英文） | 已落地（P014，live E2E 并入下次统一 E2E） |
 | check 文案 | check.txt 仅改首句的项目名（改为 "**a Harbor task**"）——恢复上游原貌，保持与 Harbor 资产可 diff 同步 | 已落地 |
 | 产物布局 | 全部落 `<dir>/triage-kit/` 子目录（analyze 与 check 同规则）：被评测目录零污染，`triage clean` 一条命令复原；不绑定任何上游 viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来自建，可自由采用新布局） | 已落地 |
 | 结构化输出 | claude harness 经 SDK 的 `output_format: json_schema` 机制（schema 由 rubric 动态编译注入）——SDK 原生强约束，无格式漂移风险 | 已落地 |
 | 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P013）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P013 待办 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
-| 多语言 | `--lang zh`：`analysis.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P009 路线 B）；`analysis.json` 恒英文；`analysis.zh.md` 退役 | 已落地 |
+| 多语言 | `--lang zh`：`analysis.md` / `check-result.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P009 路线 B；check 侧复用共享规则块，P014）；JSON 产物恒英文；`analysis.zh.md` 退役 | 已落地 |
 | 运行日志 | 每次 CLI 运行把执行日志落盘 `<CLI 参数目录>/triage-kit/run.log`（覆盖式、文件恒 DEBUG、控制台行为不变，P011）；与产物同生共死，`clean` 一并复原 | 已落地 |
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
 | 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——待立项 | 部分实现 |
@@ -109,10 +110,10 @@ triage-kit/
 │   │   ├── schema.py                build_analyze_response_schema / build_check_response_schema /
 │   │   │                            to_json_schema_dict（rubric → 动态输出模型，analyze/check 共用）
 │   │   ├── trial_reader.py          Harbor 布局朴素 JSON 读取（badcase 筛选 + trial 目录判定）
-│   │   ├── task_reader.py           task 目录校验（is_valid 等价物 + steps/ 多步检测）+ file_tree 渲染
+│   │   ├── task_reader.py           task 目录校验（is_valid 等价物 + steps/ 多步检测）+ 一层扫描（list_task_dirs）+ file_tree 渲染
 │   │   ├── cache.py                 缓存三态：resolve_cache（身份比对）+ write_json（产物+sidecar）
-│   │   ├── analyzer.py              analyze 编排：缓存→渲染→调 backend→校验→落盘→job 级聚合→翻译二跳
-│   │   └── checker.py               check 编排：file_tree 渲染（排除 triage-kit/）→单次调用→校验→落盘
+│   │   ├── analyzer.py              analyze 编排：缓存→渲染→调 backend→校验→落盘→job 级聚合→翻译二跳；日志前缀/池模式基础设施共享给 checker
+│   │   └── checker.py               check 编排：file_tree 渲染（排除 triage-kit/）→单次调用→校验→落盘→md 渲染（en 机械/zh 撰写）→批量池 + 确定性汇总
 │   │
 │   ├── backends/                    ← 【实现层】
 │   │   ├── claude/
@@ -121,7 +122,7 @@ triage-kit/
 │   │
 │   └── cli.py                       入口：triage analyze / check / clean
 │
-├── tests/                           ← pytest，137 项；conftest.py 集中共享工厂/常量/FakeBackend
+├── tests/                           ← pytest，156 项；conftest.py 集中共享工厂/常量/FakeBackend
 ├── docs/
 │   ├── DESIGN.md                    本文档
 │   └── proposals/                   特性设计文档（P000 流程）
@@ -162,6 +163,9 @@ triage analyze <trial_dir> --rubric my-rubric.toml
 # 任务质量检查（check 侧 -r 接受文件路径或家族名；家族文件当前仅有 default）
 triage check <task_dir>                       # 默认 check-default.toml，模型默认 sonnet
 triage check <task_dir> -r deep-swe           # 家族名解析 → assets/check/rubrics/check-deep-swe.toml（P002）
+triage check <task_dir> --lang zh             # check-result.md 中文原生撰写（P014 D3，语义同 analyze）
+triage check <tasks_root> -j 4                # 批量：一层扫描子目录 task，-j 并发（P014 D1/D4）
+                                              # 产物：逐 task check-result.* + 根级 check-summary.json + run.log
 
 # 复原：递归删除 triage-kit/ 产物目录（默认 dry-run，--yes 才真删；锁定目录点名跳过，其余照删）
 triage clean <job_dir>                        # 预览
@@ -170,7 +174,7 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
 
 各命令通用：`--force/-f` 绕过缓存重跑；`--verbose/-v` 开 DEBUG 日志（`[trial_name]` 前缀归因并发下的日志行）。
 
-**并发说明**（P003）：`triage analyze` 的 job 模式支持 `-j/--jobs <n>` 有界并发（`ThreadPoolExecutor(max_workers=n)` 包裹逐 trial 分析，默认 `-j 1` 保持串行行为）。产物顺序钉在目录序上，对 `j` 不变；并发下日志带 `[trial_name]` 前缀可归因；单 trial 失败不毒化兄弟（计入 `failed_trials` 并打 ERROR 行）。注意 worker 是 SDK CLI 子进程（每 trial 一个），`-j` 取值需兼顾机器资源。限流由用户自行调低 `-j` 应对（无自动限流调度）。
+**并发说明**（P003/P014）：`triage analyze` 的 job 模式与 `triage check` 的批量模式均支持 `-j/--jobs <n>` 有界并发（`ThreadPoolExecutor(max_workers=n)` 包裹逐项处理，默认 `-j 1` 保持串行行为）。产物顺序钉在目录序上，对 `j` 不变；并发下日志带 `[trial_name]`/`[task_name]` 前缀可归因；单项失败不毒化兄弟（analyze 计入 `failed_trials`、check 计入 `failed_tasks`，均打 ERROR 行）。注意 worker 是 SDK CLI 子进程（每项一个），`-j` 取值需兼顾机器资源。限流由用户自行调低 `-j` 应对（无自动限流调度）。
 
 **环境变量**：
 - `ANTHROPIC_API_KEY`（凭证，Anthropic 官方或兼容端点的 key）
@@ -202,8 +206,8 @@ triage clean <job_dir> --yes                   # 实际删除，原生评测数�
         └── analysis.meta.json                  缓存身份 sidecar
 ```
 
-**check 产物**同规则：`<task_dir>/triage-kit/check-result.json` + `check-result.meta.json` + `run.log`。
-**run.log 落点**（P011）：`<CLI 参数目录>/triage-kit/run.log`——单 trial 直调落 trial 级，job 模式落 job 级（一份，`[trial_name]` 前缀归因），check 落 task 级；`triage clean` 随目录一并复原。
+**check 产物**同规则：`<task_dir>/triage-kit/check-result.json` + `check-result.md`（语言随 `--lang`）+ `check-result.meta.json`。**check 批量模式**（P014）另在 `<tasks_root>/triage-kit/` 写 `check-summary.json`（`total/checked/cached/failed` + `per_criterion` 计数 + `failed_tasks`，纯机械计数零 LLM）。
+**run.log 落点**（P011）：`<CLI 参数目录>/triage-kit/run.log`——单 trial 直调落 trial 级，job 模式落 job 级（一份，`[trial_name]` 前缀归因），check 单任务落 task 级、批量模式落 tasks 根级（`[task_name]` 前缀归因）；`triage clean` 随目录一并复原。
 
 **缓存语义**：
 - 身份 = sidecar 记录的 **rubric 内容 sha256 + model**。匹配 → 复用（含 schema 回验）；不匹配 → 报错提示 `--force`；无 sidecar（legacy 平铺产物）→ 视为 miss 重跑覆盖
@@ -261,11 +265,19 @@ judge 的响应 trial_name 必须与 trial 目录名一致，不一致按失败�
 **check（task 侧质检）**：
 
 ```
-用户触发 → task_reader 校验 task 目录（task.toml + environment/ 存在性；steps/ 存在时校验
+用户触发 → 单命令双形态判定（P014 D1）：参数含 task.toml → 单任务；否则一层扫描子目录
+          （list_task_dirs，孙目录不进、非任务目录忽略），≥1 → 批量，0 → 报错
+        → task_reader 校验 task 目录（task.toml + environment/ 存在性；steps/ 存在时校验
           至少含一个有效 step 目录——注意：当前为整体单次检查，逐 step 展开未实现）
         → checker 渲染 prompt（file_tree 排除 triage-kit/ + criteria_guidance 注入）
         → backend 执行 agent 循环，返回 (result, meta)
         → schema 校验 → triage-kit/check-result.json + sidecar 落盘
+          （check-result.md 语言随 --lang：en=机械渲染（零 LLM 调用）；
+            zh=中文原生撰写二跳——复用 P009 共享规则块 + 任务质检骨架，
+            payload = check-result JSON，判定结论一致是硬约束；缓存命中跳过）
+        → 批量模式（P014 D2/D4）：有界线程池（-j，默认 1=串行 FIFO）→ join 后按目录序折叠
+          → 确定性汇总（checked/cached/failed + per_criterion 计数 + failed_tasks，
+            纯机械计数零 LLM）→ 根级 check-summary.json 落盘；单 task 失败折叠不中断
 ```
 
 ---
@@ -301,7 +313,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十、工程质量机制
 
-- **TDD**：全项目红-绿流程，测试先行（137 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
+- **TDD**：全项目红-绿流程，测试先行（156 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
 - **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走实测 E2E（DeepSeek anthropic 兼容端点，含 113-trial 真实 job 复跑）
 - **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P012 的核心收益——自研 harness 的 forcing-400 / 工具异常两类缺陷随 general 退役消失，相关 dropped 条目文档已删除）

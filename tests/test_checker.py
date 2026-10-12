@@ -4,15 +4,21 @@ import json
 
 import pytest
 
-from tests.conftest import CHECK_RUBRIC, make_task, write_sidecar
+from tests.conftest import (
+    CHECK_RUBRIC,
+    make_backend_keyed,
+    make_task,
+    write_sidecar,
+)
 
 # Products live in the triage-kit/ subdirectory next to the task data.
 TK = "triage-kit"
 RESULT = "check-result.json"
 SIDECAR = "check-result.meta.json"
+MD = "check-result.md"
 
 
-def make_backend(response: dict):
+def make_backend(response: dict, *, plain: str = "unused"):
     from triage_kit.core.contract import AgentMeta
 
     class FakeBackend:
@@ -28,7 +34,7 @@ def make_backend(response: dict):
 
         def query(self, prompt, *, model):
             self.plain_prompts.append(prompt)
-            return "unused", AgentMeta(n_turns=0, model=model)
+            return plain, AgentMeta(n_turns=0, model=model)
 
     return FakeBackend()
 
@@ -239,3 +245,260 @@ class TestCheckTask:
         assert len(backend.agent_prompts) == 1   # reran
         first = rubric.criteria[0].name
         assert result["checks"][first]["outcome"] == "pass"
+
+
+class TestCheckMd:
+    """P014 D3: check-result.md —— en 机械渲染 / zh 原生撰写（P009 语义）。"""
+
+    def test_en_writes_mechanical_md(self, task, rubric, good_response):
+        """en 默认：md 由 JSON 机械渲染，零额外 LLM 调用。"""
+        from triage_kit.core.checker import Checker
+
+        backend = make_backend(good_response)
+        Checker(backend=backend, rubric=rubric,
+                model="test-model").check_task(task)
+
+        md = (task / TK / MD).read_text(encoding="utf-8")
+        first = rubric.criteria[0].name
+        assert md.startswith(f"# Task Check: {task.name}\n")
+        assert f"## {first}: pass" in md
+        assert "fine" in md                        # explanation carried
+        assert backend.plain_prompts == []         # zero LLM on en
+        saved = json.loads((task / TK / RESULT).read_text(encoding="utf-8"))
+        assert saved["checks"][first]["outcome"] == "pass"
+
+    def test_zh_composes_native_md(self, task, rubric, good_response):
+        """zh：compose 跳原生撰写 check-result.md，payload 是结构化 JSON。"""
+        from triage_kit.core.checker import Checker
+
+        backend = make_backend(good_response, plain="ZH CHECK REPORT")
+        Checker(backend=backend, rubric=rubric, model="test-model",
+                lang="zh").check_task(task)
+
+        assert len(backend.plain_prompts) == 1
+        prompt = backend.plain_prompts[0]
+        assert "撰写" in prompt                    # shared rules block
+        assert "不得重新判定" in prompt
+        assert "任务质检" in prompt and task.name in prompt
+        first = rubric.criteria[0].name
+        assert first in prompt and '"pass"' in prompt   # JSON payload
+        md = (task / TK / MD).read_text(encoding="utf-8")
+        assert md == "ZH CHECK REPORT"
+        saved = json.loads((task / TK / RESULT).read_text(encoding="utf-8"))
+        assert saved["checks"][first]["outcome"] == "pass"  # JSON 恒英文契约
+
+    def test_zh_empty_compose_output_raises(self, task, rubric, good_response):
+        from triage_kit.core.checker import Checker
+
+        backend = make_backend(good_response, plain="  ")
+        with pytest.raises(ValueError, match="empty"):
+            Checker(backend=backend, rubric=rubric, model="test-model",
+                    lang="zh").check_task(task)
+
+    def test_cache_hit_skips_md_hop(self, task, rubric, good_response):
+        """P009 决策 (i) 对齐：缓存命中不 compose，md 不写。"""
+        from triage_kit.core.checker import Checker
+
+        cached = {"checks": {
+            c.name: {"outcome": "pass", "explanation": "cached"}
+            for c in rubric.criteria
+        }}
+        tk = task / TK
+        tk.mkdir()
+        (tk / RESULT).write_text(json.dumps(cached), encoding="utf-8")
+        write_sidecar(tk, SIDECAR, model="test-model",
+                      rubric_path=CHECK_RUBRIC)
+
+        backend = make_backend(good_response, plain="ZH")
+        Checker(backend=backend, rubric=rubric, model="test-model",
+                lang="zh").check_task(task)
+
+        assert backend.agent_prompts == []
+        assert backend.plain_prompts == []         # no compose on cache hit
+        assert not (tk / MD).exists()
+
+
+class TestCheckBatch:
+    """P014 D1/D2/D4: 批量模式 —— 一层扫描、确定性汇总、失败折叠。"""
+
+    def test_jobs_below_one_rejected(self, rubric):
+        from triage_kit.core.checker import Checker
+
+        with pytest.raises(ValueError, match="jobs"):
+            Checker(backend=make_backend({}), rubric=rubric, model="m",
+                    jobs=0)
+
+    def test_batch_writes_summary_and_per_task_products(
+        self, tmp_path, rubric, good_response
+    ):
+        from triage_kit.core.checker import Checker
+
+        for name in ("t1", "t2", "t3"):
+            make_task(tmp_path / name)
+        backend = make_backend_keyed(
+            {n: good_response for n in ("t1", "t2", "t3")}
+        )
+
+        summary = Checker(backend=backend, rubric=rubric, model="m",
+                          jobs=2).check_batch(tmp_path)
+
+        assert summary["total"] == 3
+        assert summary["checked"] == 3
+        assert summary["cached"] == 0
+        assert summary["failed"] == 0
+        assert summary["failed_tasks"] == []
+        first = rubric.criteria[0].name
+        assert summary["per_criterion"][first]["pass"] == 3
+        saved = json.loads(
+            (tmp_path / TK / "check-summary.json").read_text(encoding="utf-8")
+        )
+        assert saved == summary
+        for name in ("t1", "t2", "t3"):
+            assert (tmp_path / name / TK / RESULT).is_file()
+            assert (tmp_path / name / TK / MD).is_file()
+
+    def test_batch_counts_cache_hits(self, tmp_path, rubric, good_response):
+        """缓存命中的 task 计 cached：不调 LLM、不写 md（决策 (i)）。"""
+        from triage_kit.core.checker import Checker
+
+        make_task(tmp_path / "t1")
+        make_task(tmp_path / "t2")
+        tk = tmp_path / "t1" / TK
+        tk.mkdir()
+        (tk / RESULT).write_text(
+            json.dumps(good_response), encoding="utf-8"
+        )
+        write_sidecar(tk, SIDECAR, model="m", rubric_path=CHECK_RUBRIC)
+
+        backend = make_backend_keyed({"t2": good_response})
+        summary = Checker(backend=backend, rubric=rubric, model="m",
+                          jobs=2).check_batch(tmp_path)
+
+        assert summary["cached"] == 1
+        assert summary["checked"] == 1
+        assert len(backend.agent_prompts) == 1     # only t2 hit the LLM
+        assert not (tmp_path / "t1" / TK / MD).exists()
+        assert (tmp_path / "t2" / TK / MD).exists()
+
+    def test_single_failure_folded_not_raised(
+        self, tmp_path, rubric, good_response, caplog
+    ):
+        """D4: 坏 task 落 failed_tasks 并有 ERROR 行点名，兄弟照常。"""
+        import logging as logging_mod
+
+        from triage_kit.core.checker import Checker
+
+        make_task(tmp_path / "t1__bad")
+        make_task(tmp_path / "t2__good")
+        bad = {"checks": {"typos":
+                          {"outcome": "bogus", "explanation": "x"}}}
+        backend = make_backend_keyed(
+            {"t1__bad": bad, "t2__good": good_response}
+        )
+
+        with caplog.at_level(logging_mod.ERROR):
+            summary = Checker(backend=backend, rubric=rubric, model="m",
+                              jobs=2).check_batch(tmp_path)
+
+        assert summary["failed_tasks"] == ["t1__bad"]
+        assert summary["failed"] == 1
+        assert summary["checked"] == 1
+        assert (tmp_path / "t2__good" / TK / RESULT).is_file()
+        assert any(
+            r.levelname == "ERROR" and "t1__bad" in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_failed_tasks_follow_listing_not_completion(
+        self, tmp_path, rubric
+    ):
+        """顺序钉定：完成顺序倒置时 failed_tasks 仍按目录序。"""
+        from triage_kit.core.checker import Checker
+
+        make_task(tmp_path / "t1__slow")
+        make_task(tmp_path / "t2__fast")
+        bad = {"checks": {"typos":
+                          {"outcome": "bogus", "explanation": "x"}}}
+        backend = make_backend_keyed(
+            {"t1__slow": bad, "t2__fast": bad},
+            delays={"t1__slow": 0.3, "t2__fast": 0.0},
+        )
+
+        summary = Checker(backend=backend, rubric=rubric, model="m",
+                          jobs=2).check_batch(tmp_path)
+
+        assert summary["failed_tasks"] == ["t1__slow", "t2__fast"]
+
+    def test_batch_log_prefixes(self, tmp_path, rubric, good_response,
+                                caplog):
+        """归因前缀复用：并发下 triage_kit 日志带 [task_name] 前缀。"""
+        import logging as logging_mod
+
+        from triage_kit.core.analyzer import install_item_log_prefix
+        from triage_kit.core.checker import Checker
+
+        for name in ("t1", "t2"):
+            make_task(tmp_path / name)
+        backend = make_backend_keyed(
+            {n: good_response for n in ("t1", "t2")}
+        )
+
+        install_item_log_prefix()
+        with caplog.at_level(logging_mod.INFO):
+            Checker(backend=backend, rubric=rubric, model="m",
+                    jobs=2).check_batch(tmp_path)
+
+        finished = [
+            r.getMessage() for r in caplog.records
+            if "check finished" in r.getMessage()
+        ]
+        assert len(finished) == 2
+        assert {m.split("]")[0] + "]" for m in finished} == {
+            "[t1]", "[t2]",
+        }
+
+    def test_barrier_proves_real_overlap(self, tmp_path, rubric,
+                                         good_response):
+        """重叠证明：2 task / jobs=2，barrier 只在真并发时放行。"""
+        import threading
+
+        from triage_kit.core.checker import Checker
+        from triage_kit.core.contract import AgentMeta
+
+        for name in ("t1", "t2"):
+            make_task(tmp_path / name)
+
+        class BarrierBackend:
+            def __init__(self):
+                self.barrier = threading.Barrier(2)
+
+            def query_agent(self, prompt, *, cwd, model, add_dirs=None,
+                            output_schema=None, max_turns=15):
+                self.barrier.wait(timeout=5)
+                return good_response, AgentMeta(n_turns=2, model=model)
+
+            def query(self, prompt, *, model):
+                return "ZH", AgentMeta(n_turns=0, model=model)
+
+        summary = Checker(backend=BarrierBackend(), rubric=rubric,
+                          model="m", jobs=2).check_batch(tmp_path)
+
+        assert summary["failed"] == 0
+        assert summary["checked"] == 2
+
+    def test_nested_task_dirs_not_discovered(self, tmp_path):
+        """D1: 一层扫描 —— 孙目录任务不进批量，非任务目录被忽略。"""
+        from triage_kit.core.task_reader import list_task_dirs
+
+        make_task(tmp_path / "t1")
+        make_task(tmp_path / "group" / "t2")
+        (tmp_path / "notatask").mkdir()
+
+        assert [p.name for p in list_task_dirs(tmp_path)] == ["t1"]
+
+    def test_empty_batch_raises(self, tmp_path, rubric):
+        from triage_kit.core.checker import Checker
+
+        with pytest.raises(ValueError, match="task"):
+            Checker(backend=make_backend({}), rubric=rubric,
+                    model="m").check_batch(tmp_path)

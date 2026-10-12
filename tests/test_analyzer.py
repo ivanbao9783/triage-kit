@@ -677,7 +677,7 @@ class TestParallelAnalysis:
 
         from triage_kit.core.analyzer import (
             Analyzer,
-            install_trial_log_prefix,
+            install_item_log_prefix,
         )
 
         make_trial(tmp_path / "t1__aaa", reward=0.0)
@@ -688,7 +688,7 @@ class TestParallelAnalysis:
         }
         backend = make_backend_keyed(responses)
 
-        install_trial_log_prefix()
+        install_item_log_prefix()
         with caplog.at_level(logging_mod.INFO):
             Analyzer(backend=backend, rubric=rubric, model="m",
                      jobs=2).analyze_job(tmp_path)

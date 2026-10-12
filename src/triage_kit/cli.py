@@ -14,8 +14,8 @@ from pathlib import Path
 
 import typer
 
-from triage_kit.core import trial_reader
-from triage_kit.core.analyzer import Analyzer, install_trial_log_prefix
+from triage_kit.core import task_reader, trial_reader
+from triage_kit.core.analyzer import Analyzer, install_item_log_prefix
 from triage_kit.core.assets import get_asset
 from triage_kit.core.checker import Checker
 from triage_kit.core.rubric import load_rubric
@@ -153,7 +153,7 @@ def analyze(
         _fail(f"--lang must be 'en' or 'zh', got {lang!r}")
     if jobs < 1:
         _fail(f"--jobs must be an integer >= 1, got {jobs}")
-    install_trial_log_prefix()
+    install_item_log_prefix()
 
     path = Path(path)
     if not path.exists():
@@ -194,7 +194,10 @@ def analyze(
 
 @app.command()
 def check(
-    path: Path = typer.Argument(..., help="Task directory to inspect."),
+    path: Path = typer.Argument(
+        ..., help="Task directory to inspect, or a directory of task "
+                  "directories to check in batch."
+    ),
     rubric: str = typer.Option(
         None, "--rubric", "-r",
         help="Rubric file path or family name (default: check-default).",
@@ -212,9 +215,26 @@ def check(
         help="Re-check even if cached triage-kit/check-result.json exists "
              "(overwrites).",
     ),
+    lang: str = typer.Option(
+        "en", "--lang",
+        help="Report language for check-result.md: en (default, "
+             "mechanical rendering) or zh (natively composed Chinese; "
+             "check-result.json stays English).",
+    ),
+    jobs: int = typer.Option(
+        1, "--jobs", "-j",
+        help="Concurrent task checks in batch mode (default 1 = "
+             "sequential; single-task check is never pooled).",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Inspect task quality: judge a task directory against a rubric."""
+    if lang not in ("en", "zh"):
+        _fail(f"--lang must be 'en' or 'zh', got {lang!r}")
+    if jobs < 1:
+        _fail(f"--jobs must be an integer >= 1, got {jobs}")
+    install_item_log_prefix()
+
     path = Path(path)
     if not path.exists():
         _fail(f"path not found: {path}")
@@ -230,10 +250,26 @@ def check(
             rubric=load_rubric(rubric_path),
             model=effective_model,
             force=force,
+            lang=lang,
+            jobs=jobs,
         )
-        # P011: persist the run log next to the products it explains.
+        # P014 D1: single command, two shapes — the argument itself is a
+        # task directory (contains task.toml) → single check; otherwise a
+        # one-level scan decides batch mode. No --recursive.
+        if task_reader.is_task_dir(path):
+            run = lambda: checker.check_task(path)
+        elif task_reader.list_task_dirs(path):
+            run = lambda: checker.check_batch(path)
+        else:
+            _fail(
+                f"not a task directory and no task directories found "
+                f"under: {path}"
+            )
+            return
+        # P011: persist the run log next to the products it explains
+        # (batch mode: at the root, next to check-summary.json).
         with _persist_run_log(path, verbose):
-            checker.check_task(path)
+            run()
     except ValueError as e:
         _fail(str(e))
 

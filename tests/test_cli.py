@@ -361,6 +361,92 @@ class TestCheckCommand:
         result = runner.invoke(app, ["check", str(empty), "--model", "m1"])
         assert result.exit_code != 0
 
+    def test_lang_zh_composes_md(self, fake_backend, tmp_path):
+        """P014 D3: --lang zh 触发 compose 跳，md 落盘。"""
+        from triage_kit.cli import app
+
+        task = tmp_path / "task"
+        make_task(task)
+
+        result = runner.invoke(
+            app, ["check", str(task), "--model", "m1", "--lang", "zh"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert len(fake_backend.plain_prompts) == 1
+        md = (task / "triage-kit" / "check-result.md").read_text(
+            encoding="utf-8"
+        )
+        assert md == "JOB SUMMARY"
+
+    def test_lang_default_en_mechanical_md(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        task = tmp_path / "task"
+        make_task(task)
+
+        result = runner.invoke(app, ["check", str(task), "--model", "m1"])
+
+        assert result.exit_code == 0, result.output
+        assert fake_backend.plain_prompts == []
+        md = (task / "triage-kit" / "check-result.md").read_text(
+            encoding="utf-8"
+        )
+        assert md.startswith(f"# Task Check: {task.name}\n")
+
+    def test_lang_invalid_rejected(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        task = tmp_path / "task"
+        make_task(task)
+        result = runner.invoke(
+            app, ["check", str(task), "--model", "m1", "--lang", "fr"]
+        )
+        assert result.exit_code != 0
+
+    def test_jobs_zero_rejected(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        task = tmp_path / "task"
+        make_task(task)
+        result = runner.invoke(
+            app, ["check", str(task), "--model", "m1", "-j", "0"]
+        )
+        assert result.exit_code != 0
+
+    def test_batch_dir_checks_all_tasks(self, fake_backend, tmp_path):
+        """P014 D1: tasks 根目录 → 批量；汇总 + run.log 落根级。"""
+        from triage_kit.cli import app
+
+        tasks = tmp_path / "tasks"
+        for name in ("t1", "t2"):
+            make_task(tasks / name)
+
+        result = runner.invoke(
+            app, ["check", str(tasks), "--model", "m1", "-j", "2"]
+        )
+
+        assert result.exit_code == 0, result.output
+        for name in ("t1", "t2"):
+            assert (tasks / name / "triage-kit" /
+                    "check-result.json").is_file()
+        summary = json.loads(
+            (tasks / "triage-kit" / "check-summary.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert summary["total"] == 2
+        assert summary["failed"] == 0
+        assert (tasks / "triage-kit" / "run.log").is_file()
+
+    def test_batch_empty_dir_errors(self, fake_backend, tmp_path):
+        from triage_kit.cli import app
+
+        empty = tmp_path / "no-tasks"
+        empty.mkdir()
+        result = runner.invoke(app, ["check", str(empty), "--model", "m1"])
+        assert result.exit_code != 0
+
 
 class TestCleanCommand:
     """triage clean: 复原原生输入——递归删除 triage-kit/ 产物目录。"""
