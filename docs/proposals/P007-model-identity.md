@@ -24,7 +24,7 @@ comparison jobs, which is its intended use case.
 
 - No changes to the frozen `assets/` prompt/rubric files.
 - No new per-trial product fields unless the chosen design requires
-  them (schema stability is a soft convention for the future viewer).
+  them (schema stability is a soft convention for the viewer).
 - No cross-job comparison.
 
 ## Current state & gap
