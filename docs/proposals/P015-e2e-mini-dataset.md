@@ -6,7 +6,7 @@ Status: **landed** (2026-10-12) · Type: feature · Priority: medium
 matrix executed on deepseek-flash — all steps green, one real bug
 found and fixed (P014 per_criterion cache gap), runbook steps 5/6
 corrected to carry `--force` under the decision-(i) cache semantics.
-First full pass: ~14 LLM calls, ~25 min wall. Regression 163 green.)
+First full pass: ~14 LLM calls, ~25 min wall. Regression 162 green.)
 
 ## Background & motivation
 
@@ -40,7 +40,7 @@ major-version closures. The mini set does not replace them.
 
 ## Current state & gap
 
-- Unit tests (156) run on synthetic fixtures via FakeBackend — zero
+- Unit tests (162) run on synthetic fixtures via FakeBackend — zero
   network. They verify orchestration, not real-data shapes × real
   endpoints.
 - Live E2E so far: ad-hoc sample picks per feature (3-trial P009

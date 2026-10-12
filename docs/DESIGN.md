@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：CLI 三命令（analyze / check / clean）可用，156 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过（含 113-trial 真实 job 的 badcase 回收），产物布局经真实样本实测。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。check 侧批量模式 + 人读产物（P014）已实现（live E2E 并入下次统一 E2E）。
+**项目现状**：CLI 三命令（analyze / check / clean）可用，162 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过——含 113-trial 真实 job 的 badcase 回收，以及固定 mini 集（P015）上的完整端到端矩阵。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。check 侧批量模式 + 人读产物（P014）已落地并 live 验证；E2E 固定数据集与 runbook（P015）已落地。
 
 ---
 
@@ -122,7 +122,8 @@ triage-kit/
 │   │
 │   └── cli.py                       入口：triage analyze / check / clean
 │
-├── tests/                           ← pytest，156 项；conftest.py 集中共享工厂/常量/FakeBackend
+├── tests/                           ← pytest，162 项；conftest.py 集中共享工厂/常量/FakeBackend
+│   └── e2e/                         固定 mini 集（P015）：RUNBOOK.md 命令矩阵 + data/（3 task + 3 trial 瘦身样本）
 ├── docs/
 │   ├── DESIGN.md                    本文档
 │   └── proposals/                   特性设计文档（P000 流程）
@@ -313,7 +314,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十、工程质量机制
 
-- **TDD**：全项目红-绿流程，测试先行（156 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
+- **TDD**：全项目红-绿流程，测试先行（162 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
 - **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走实测 E2E（DeepSeek anthropic 兼容端点，含 113-trial 真实 job 复跑）
 - **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P012 的核心收益——自研 harness 的 forcing-400 / 工具异常两类缺陷随 general 退役消失，相关 dropped 条目文档已删除）

@@ -191,7 +191,7 @@ pre-development gate.
 
 ```bash
 pip install -r requirements.txt
-pytest                    # 156 tests, no network access needed
+pytest                    # 162 tests, no network access needed
 ```
 
 ## License

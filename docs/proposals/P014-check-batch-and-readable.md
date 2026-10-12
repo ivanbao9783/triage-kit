@@ -6,7 +6,7 @@ deepseek-flash. Batch check (-j 2, real verdicts incl. 1 fail + 2
 not_applicable), cache rerun, single-task --force, per-task md
 skeletons, summary + root run.log all verified. One fix landed from
 the run: per_criterion now counts cached verdicts too — a resumed
-CI rerun must not lose its statistics. Regression 163 green.)
+CI rerun must not lose its statistics. Regression 162 green.)
 
 ## Background & motivation
 
