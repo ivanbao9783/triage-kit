@@ -49,22 +49,26 @@ verdict comparison and reduces single-vendor dependence.
 - Contract: `AgentBackend.query_agent(prompt, *, cwd, model, add_dirs,
   output_schema, max_turns)` and `query(prompt, *, model)` —
   `output_schema` is a mandatory capability for `analyze`/`check`.
-- **Gap / open question:** the Codex SDK README does not document
-  JSON-schema-constrained output. The structured-output requirement must
-  be satisfied natively or approximated (prompt-driven JSON + parse), and
-  the fallback's schema-validation path decided.
+- **Structured output — resolved by spike (native):** `Thread.run(...)`
+  takes `output_schema: JsonObject | None`; the schema-constrained result
+  comes back as JSON text in `TurnResult.final_response` (parse with
+  `json.loads`). No prompt-driven fallback is needed.
 
 ## Design
 
 - Mirror `ClaudeHarness`: lazy SDK import, injectable `sdk` for tests, an
   env guard on the real path only, and a `_meta` mapping into
   `AgentMeta`.
-- Parameter mapping: `cwd` → thread working directory; read-only tools
-  (`Read`/`Glob`/`Grep` equivalent) → Codex workspace access; `max_turns`
-  → turn cap (confirm the SDK exposes one); `output_schema` → native
-  structured output if available, else the prompt-driven fallback above.
-- `query` (no tools, single-shot, job-level aggregation) → `thread.run`
-  with tools disabled.
+- Parameter mapping: `cwd` → thread working directory; read-only judge
+  loop → `sandbox=Sandbox.read_only` (native); `model` → `model`; `effort`
+  → `ReasoningEffort`; `output_schema` → native
+  `output_schema=` then `json.loads(final_response)`.
+- Turn budget: the real signature exposes **no** turn/step cap (only
+  `effort`), so `max_turns` is advisory here — the harness must bound the
+  loop itself (or accept an unbounded turn and rely on the SDK's own
+  limits). Decide during Gate 1.
+- `query` (no tools, single-shot, job aggregation) → `thread.run` with a
+  read-only/no-tool turn.
 - Auth: reuse existing Codex auth; document the login precondition.
 - Add a `codex` extra in `pyproject.toml`; extend `build_backend`,
   `_DEFAULT_MODEL`, and the unknown-backend error to list valid values.
@@ -87,9 +91,33 @@ verdict comparison and reduces single-vendor dependence.
   --force` on a P015 mini trial; assert well-formed products and real
   verdicts (Gate 2 requires this live pass).
 
+## Spike results (2026-10-12)
+
+Venv install + real introspection of `openai-codex` **0.162.1** (PyPI
+metadata + `inspect.signature` on the installed package):
+
+- **Structured output: native.** `Thread.run(input, *, ..., output_schema:
+  JsonObject | None = None, ...) -> TurnResult`; the example `12_turn_params_kitchen_sink`
+  passes a raw JSON-schema dict and `json.loads`es `final_response`.
+- **Sandbox: native presets** `Sandbox.read_only` / `workspace_write` /
+  `full_access` → the read-only judge loop maps directly.
+- **`TurnResult` fields:** `id, status, error, started_at, completed_at,
+  duration_ms, final_response, items, usage`. `usage` is
+  `ThreadTokenUsage(last, model_context_window, total)` → input/output
+  token counts are available; **no `num_turns`** (derive `n_turns` from
+  `items`) and **no cost** (null).
+- **Windows / size:** win_amd64 wheel present
+  (`openai_codex-0.162.1`, 0.1 MB + pinned `openai-codex-cli-bin==0.162.1`,
+  **144.7 MB**); requires Python >=3.10; pulls `pydantic>=2.12`,
+  `packaging>=26.2`. Bundled CLI, no system Node.
+- Consequence: drop the prompt-driven fallback; `n_turns`/`cost` in
+  `AgentMeta` are best-effort.
+
 ## Status & links
 
 - Proposed 2026-10-12 (medium priority; registered while the backend seam
   is single-implementation).
+- Spike 2026-10-12: structured output is native (`output_schema`) and the
+  read-only sandbox is native; no turn cap, no cost — see Spike results.
 - Related: P012 (backend seam), P013 (judge sandbox), P018 (DeepSeek
   harness SDK peer). Upstream: https://github.com/openai/codex/blob/main/sdk/python/README.md

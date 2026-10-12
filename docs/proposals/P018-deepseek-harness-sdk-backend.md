@@ -45,18 +45,18 @@ notifications)`. Credentials/endpoints come from `DEEPSEEK_API_KEY` /
 
 - `cli.build_backend` maps only `claude`; `_DEFAULT_MODEL` has a single
   `claude` entry; `backends/` contains only `claude/`.
-- **Gap / open question (structured output):** the README does not document
-  a JSON-schema output mode — the harness owns the loop and returns
-  `final_response` text. The mandatory `output_schema` capability must be
-  satisfied natively or approximated (prompt-driven JSON + parse), same
-  decision as P017.
-- **Gap / open question (meta):** `RunResult` per the README exposes
-  `final_response` / `finish_reason` / `events` / `notifications` — not
-  tokens or cost. `AgentMeta` fields are nullable, but the metric gap
-  should be confirmed against the API reference.
-- **Gap / platform:** the runtime wheel is platform-specific and ships a
-  bundled binary; confirm Windows support and the install footprint
-  before landing.
+- **Structured output — resolved by spike (NOT native):** neither the
+  README nor the installed source exposes any schema/output constraint;
+  `DeepSeekHarness.run` has no `output_schema` parameter. The mandatory
+  capability must be approximated via **prompt-driven JSON + parse** (the
+  shaped approach the retired general harness used). This is the main
+  engineering risk for this backend.
+- **Meta — resolved by spike (no usage):** `RunResult` fields are
+  `session_id, final_response, finish_reason, events, notifications` — no
+  tokens, no cost. `AgentMeta` renders those fields null unless they can
+  be recovered from `events`/`notifications`.
+- **Platform / size — resolved by spike:** Windows x64 wheel published
+  (no Windows arm64); see Spike results below.
 
 ## Design
 
@@ -65,8 +65,16 @@ notifications)`. Credentials/endpoints come from `DEEPSEEK_API_KEY` /
 - `dsh_home`: create an isolated home per run (fresh home isolates
   profile-owned stores); a fresh `session_id` per trial for independent
   work.
-- `query` (no tools, single-shot, job-level aggregation) → `run()` with a
-  tools-minimal profile / prompt-only path (verify which profile fits).
+- Structured output: wrap the judge prompt with an explicit "return only
+  JSON matching this schema" instruction and `json.loads` + validate the
+  parsed object (no schema-enforced decode from the harness).
+- Read-only judge loop: the `sdk` profile inherits base `read`/`write`/
+  `edit` tools, so there is **no** native read-only sandbox — constrain
+  via prompt policy or a profile patch (Decision at Gate 1; overlaps the
+  P013 concern).
+- `query` (no tools, single-shot, job-level aggregation) → `run()` on the
+  `sdk-minimal` profile (single shell tool) or a prompt-only path (verify
+  which profile fits).
 - CLI/env: honor `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL`; add a
   `deepseek` extra in `pyproject.toml`; extend `build_backend`,
   `_DEFAULT_MODEL`, and the unknown-backend error to list valid values.
@@ -89,9 +97,36 @@ notifications)`. Credentials/endpoints come from `DEEPSEEK_API_KEY` /
   starts (profile handshake within `initialize_timeout_seconds`) and
   products / verdicts are well-formed (Gate 2 requires this live pass).
 
+## Spike results (2026-10-12)
+
+Venv install + real introspection of `deepseek-harness-sdk` **0.1.5rc1**
+(PyPI metadata + `inspect.signature` + a keyword scan of the installed
+source):
+
+- **Structured output: NOT native.** `DeepSeekHarness.run(input, *,
+  session_id=None, on_notification=None) -> RunResult` has no
+  `output_schema`; a source scan of the installed package for
+  `output_schema` / `json_schema` / `response_format` / `structured`
+  returned **zero** hits (repo-wide search: only LSP/tool input schemas).
+  → prompt-driven JSON + parse is required.
+- **`RunResult` fields:** `session_id, final_response, finish_reason,
+  events, notifications` → no token/cost surface (confirm whether
+  `events`/`notifications` carry usage).
+- **Windows / size:** win_amd64 wheel present
+  (`deepseek_harness_runtime_bin-0.1.5rc1-py3-none-win_amd64.whl`,
+  **68.7 MB**, plus the tiny `deepseek-harness-sdk` wheel); published
+  targets are Linux x64/arm64, macOS x64/arm64, Windows x64 — **no
+  Windows arm64**. Requires Python >=3.10; pulls `pydantic>=2.12`.
+  Bundled native CLI (`dsh`), no system Node.
+- **Maturity risk:** the only published version is a **release candidate
+  (0.1.5rc1)** — treat the API as unstable; pin the exact version.
+
 ## Status & links
 
 - Proposed 2026-10-12 (medium priority; registered while the backend seam
   is single-implementation).
+- Spike 2026-10-12: structured output is **not** native (prompt-driven
+  JSON needed); no token/cost in `RunResult`; Windows x64 only; SDK is
+  `0.1.5rc1` — see Spike results.
 - Related: P012 (backend seam), P013 (judge sandbox), P017 (Codex SDK
   peer). Upstream: https://github.com/deepseek-ai/deepseek-harness/blob/master/python/sdk/README.md
