@@ -30,8 +30,8 @@ _PHASES = (
     ("verifier", "Verifier"),
 )
 
-_REWARD_KEYS = ("reward", "f2p_passed", "f2p_total", "p2p_passed",
-                "p2p_total", "partial")
+_PASSED_SUFFIX = "_passed"
+_TOTAL_SUFFIX = "_total"
 
 
 class CheckModeUnsupported(ValueError):
@@ -80,10 +80,51 @@ def duration_sec(phase):
     return round((end - start).total_seconds(), 1) if start and end else None
 
 
-def norm_rewards(rewards: dict | None) -> dict:
-    """Pin the reward block to a stable key set (missing → None)."""
+def reward_of(rewards: dict | None):
+    """Main reward value (the ``reward`` key), or None."""
+    return (rewards or {}).get("reward")
+
+
+def reward_items(rewards: dict | None) -> list[dict]:
+    """Dataset-agnostic breakdown of a verifier reward block.
+
+    Every ``<name>_passed`` / ``<name>_total`` pair collapses into one
+    item carrying its ratio (rendered as a progress bar); any other key
+    becomes a plain item. The main ``reward`` key is excluded — it is the
+    outcome badge, not a breakdown row. No dataset-specific key (f2p,
+    p2p, ...) is assumed.
+    """
     rewards = rewards or {}
-    return {key: rewards.get(key) for key in _REWARD_KEYS}
+    items: list[dict] = []
+    seen: set[str] = set()
+    for key, value in rewards.items():
+        if key == "reward" or key in seen:
+            continue
+        base = None
+        if key.endswith(_PASSED_SUFFIX):
+            candidate = key[: -len(_PASSED_SUFFIX)]
+            if f"{candidate}{_TOTAL_SUFFIX}" in rewards:
+                base = candidate
+        elif key.endswith(_TOTAL_SUFFIX):
+            candidate = key[: -len(_TOTAL_SUFFIX)]
+            if f"{candidate}{_PASSED_SUFFIX}" in rewards:
+                base = candidate
+        if base is not None:
+            passed = rewards[f"{base}{_PASSED_SUFFIX}"]
+            total = rewards[f"{base}{_TOTAL_SUFFIX}"]
+            seen.update({f"{base}{_PASSED_SUFFIX}", f"{base}{_TOTAL_SUFFIX}"})
+            items.append({
+                "key": base, "value": None,
+                "passed": passed, "total": total,
+                "ratio": (passed / total) if total else None,
+            })
+        else:
+            seen.add(key)
+            items.append({
+                "key": key, "value": value,
+                "passed": None, "total": None, "ratio": None,
+            })
+    return items
 
 
 # ---------- mode routing ----------
@@ -114,35 +155,51 @@ def detect_mode(path: Path) -> str:
 
 # ---------- scanning ----------
 
-def _trial_reward(trial_dir: Path):
-    """Main reward from verifier_result.rewards, else verifier/reward.json."""
+def _trial_row(trial_dir: Path) -> dict:
+    """One overview-table row, read tolerantly from a trial directory.
+
+    The aggregation fields (tokens / duration / failed tests / exception)
+    are None/False when their native file is absent, so the overview
+    degrades to a name+reward table on a raw directory. Nothing here
+    assumes a dataset-specific reward schema.
+    """
     result = read_json(trial_dir / "result.json") or {}
     rewards = (result.get("verifier_result") or {}).get("rewards") or {}
-    reward = rewards.get("reward")
+    reward = reward_of(rewards)
     if reward is None:
-        reward = (read_json(trial_dir / "verifier" / "reward.json") or {}).get(
-            "reward"
-        )
-    return reward
+        reward = reward_of(read_json(trial_dir / "verifier" / "reward.json"))
+    agent_result = result.get("agent_result") or {}
+    summary = (
+        (read_json(trial_dir / "verifier" / "ctrf.json") or {}).get("results")
+        or {}
+    ).get("summary") or {}
+    return {
+        "name": trial_dir.name,
+        "reward": reward,
+        "resolved": reward is not None and reward >= 1,
+        "tokens_in": agent_result.get("n_input_tokens"),
+        "tokens_out": agent_result.get("n_output_tokens"),
+        "duration_sec": duration_sec({"started_at": result.get("started_at"),
+                                      "finished_at": result.get("finished_at")}),
+        "failed_tests": summary.get("failed"),
+        "has_exception": bool(result.get("exception_info")),
+        "has_diagnosis": (trial_dir / PRODUCTS_DIR / ANALYSIS_JSON).is_file(),
+    }
 
 
 def scan_trials(root: Path) -> list[dict]:
     """Scan one level of trial directories, lexicographically.
 
-    Returns ``{name, reward, has_diagnosis}`` rows; sub-directories
-    without a readable ``result.json`` (e.g. the job-level
-    ``triage-kit/`` dir) are skipped rather than erroring.
+    Returns overview rows (input to both the table and the nav tree);
+    sub-directories without a readable ``result.json`` (e.g. the
+    job-level ``triage-kit/`` dir) are skipped rather than erroring.
     """
     root = Path(root)
     rows: list[dict] = []
     for entry in sorted(p for p in root.iterdir() if p.is_dir()):
         if read_json(entry / "result.json") is None:
             continue
-        rows.append({
-            "name": entry.name,
-            "reward": _trial_reward(entry),
-            "has_diagnosis": (entry / PRODUCTS_DIR / ANALYSIS_JSON).is_file(),
-        })
+        rows.append(_trial_row(entry))
     return rows
 
 
@@ -166,6 +223,31 @@ def select_reward(trials: list[dict], reward: str | None) -> list[dict]:
     return trials
 
 
+def summarize(trials: list[dict]) -> dict:
+    """Overview KPI band, dataset-agnostic.
+
+    ``resolved_rate`` counts reward>=1 over trials that carry a reward —
+    a trial with no reward data cannot be scored either way, so it is
+    excluded from the denominator. Token / duration figures ignore
+    missing values rather than treating them as 0.
+    """
+    with_reward = [t for t in trials if t["reward"] is not None]
+    resolved = sum(1 for t in with_reward if t["reward"] >= 1)
+    ins = [t["tokens_in"] for t in trials if t["tokens_in"] is not None]
+    outs = [t["tokens_out"] for t in trials if t["tokens_out"] is not None]
+    durs = [t["duration_sec"] for t in trials if t["duration_sec"] is not None]
+    return {
+        "trials": len(trials),
+        "resolved": resolved,
+        "rewarded": len(with_reward),
+        "resolved_rate": (resolved / len(with_reward)) if with_reward else None,
+        "tokens_in": sum(ins) if ins else None,
+        "tokens_out": sum(outs) if outs else None,
+        "avg_duration_sec": (sum(durs) / len(durs)) if durs else None,
+        "exceptions": sum(1 for t in trials if t["has_exception"]),
+    }
+
+
 def load_overview(root: Path) -> dict:
     """Job-level view: aggregate markdown + the trials table + counts."""
     root = Path(root)
@@ -174,6 +256,7 @@ def load_overview(root: Path) -> dict:
         "job_md": read_text(root / PRODUCTS_DIR / ANALYSIS_MD),
         "trials": trials,
         "counts": reward_counts(trials),
+        "summary": summarize(trials),
     }
 
 
@@ -189,6 +272,7 @@ def load_trial(trial_dir: Path) -> dict:
     if not rewards:
         rewards = read_json(trial_dir / "verifier" / "reward.json") or {}
 
+    reward = reward_of(rewards)
     ctrf = (read_json(trial_dir / "verifier" / "ctrf.json") or {}).get(
         "results"
     ) or {}
@@ -200,7 +284,9 @@ def load_trial(trial_dir: Path) -> dict:
         "model": "/".join(
             p for p in (model_info.get("provider"), model_info.get("name")) if p
         ),
-        "rewards": norm_rewards(rewards),
+        "reward": reward,
+        "resolved": reward is not None and reward >= 1,
+        "reward_items": reward_items(rewards),
         "exception": result.get("exception_info") or {},
         "tokens": {
             "input": agent_result.get("n_input_tokens"),

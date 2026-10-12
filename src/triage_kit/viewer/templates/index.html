@@ -1,49 +1,87 @@
 {% extends "base.html" %}
 {% block title %}Trials — triage viewer{% endblock %}
-{% block crumbs %} / <span>trials · {{ root_name }}</span>{% endblock %}
+{% block subtitle %}{{ job_name }} · {{ summary.trials }} trials · analyze{% endblock %}
 {% block body %}
 
 <h1>{{ root_name }}</h1>
-<p class="kv muted">输入目录：<code>{{ root }}</code> · 模式：<b>analyze</b>（trials）</p>
+<p class="kv muted">输入目录 <code>{{ root }}</code> · 模式 <b>analyze</b>（trials）</p>
 
-<h2>① 全景分析结果（job 聚合）</h2>
+<h2>① 总览</h2>
+<div class="grid">
+  <div class="kpi">
+    <div class="k">Trials</div>
+    <div class="v">{{ summary.trials }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">Resolved 率</div>
+    <div class="v {{ 'good' if summary.resolved_rate == 1 else ('badc' if summary.resolved_rate == 0 else '') }}">
+      {{ summary.resolved_rate | pct }}
+    </div>
+    <div class="n">{{ summary.resolved }} / {{ summary.rewarded }} 有 reward</div>
+  </div>
+  <div class="kpi">
+    <div class="k">输入 tokens</div>
+    <div class="v">{{ summary.tokens_in | fmt }}</div>
+    <div class="n">含 cache</div>
+  </div>
+  <div class="kpi">
+    <div class="k">输出 tokens</div>
+    <div class="v">{{ summary.tokens_out | fmt }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">平均耗时</div>
+    <div class="v">{{ summary.avg_duration_sec | secs }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">异常 trial</div>
+    <div class="v {{ 'badc' if summary.exceptions else 'good' }}">{{ summary.exceptions }}</div>
+  </div>
+</div>
+
+<h2>② 全景分析结果（job 聚合）</h2>
 {% if job_md %}
 <div class="card md">{{ job_md | safe }}</div>
 {% else %}
-<div class="card muted">
+<div class="card empty">
   未找到根目录聚合分析（<code>triage-kit/analysis.md</code> 不存在）。
   在 job 级运行 <code>triage analyze {{ root_name }}</code> 后即可补齐。
 </div>
 {% endif %}
 
-<h2>② Trials（{{ trials | length }}）</h2>
+<h2 id="trials">③ Trials（{{ trials | length }}）</h2>
 <div class="filters">
-  Reward 筛选：
-  <a href="/" class="{{ 'active' if reward_sel is none else '' }}">全部 ({{ counts.all }})</a>
-  <a href="/?reward=1" class="{{ 'active' if reward_sel == '1' else '' }}">= 1 ({{ counts['1'] }})</a>
-  <a href="/?reward=0" class="{{ 'active' if reward_sel == '0' else '' }}">= 0 ({{ counts['0'] }})</a>
+  Filter:
+  <a href="/#trials" class="{{ 'active' if reward_sel is none else '' }}">ALL {{ counts.all }}</a>
+  <a href="/?reward=1#trials" class="{{ 'active' if reward_sel == '1' else '' }}">Resolved {{ counts['1'] }}</a>
+  <a href="/?reward=0#trials" class="{{ 'active' if reward_sel == '0' else '' }}">Unresolved {{ counts['0'] }}</a>
 </div>
 <div class="card" style="padding:0">
   <table>
     <thead>
       <tr>
         <th>Trial</th>
-        <th>Reward</th>
+        <th>状态</th>
+        <th class="num">输入 tok</th>
+        <th class="num">输出 tok</th>
+        <th class="num">耗时</th>
+        <th class="num">失败用例</th>
         <th>诊断</th>
       </tr>
     </thead>
     <tbody>
       {% for t in trials %}
       <tr>
-        <td><a href="/trial/{{ t.name }}">{{ t.name }}</a></td>
+        <td class="name"><a href="/trial/{{ t.name }}">{{ t.name }}</a></td>
         <td>
-          {% if t.reward is none %}
-          <span class="muted">—</span>
-          {% else %}
-          <span class="badge {{ 'pass' if t.reward == 1 else 'fail' }}">{{ t.reward }}</span>
-          {% endif %}
+          {% if t.reward is none %}<span class="badge b-neu">—</span>
+          {% elif t.resolved %}<span class="badge b-ok">Resolved</span>
+          {% else %}<span class="badge b-bad">Unresolved</span>{% endif %}
         </td>
-        <td>{% if t.has_diagnosis %}<span class="badge pass">有</span>{% else %}<span class="muted">无</span>{% endif %}
+        <td class="num">{{ t.tokens_in | fmt }}</td>
+        <td class="num">{{ t.tokens_out | fmt }}</td>
+        <td class="num">{{ t.duration_sec | secs }}</td>
+        <td class="num">{{ t.failed_tests | fmt }}</td>
+        <td>{% if t.has_diagnosis %}<span class="badge b-ok">有</span>{% else %}<span class="muted">无</span>{% endif %}
         </td>
       </tr>
       {% endfor %}

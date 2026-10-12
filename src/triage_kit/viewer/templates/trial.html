@@ -1,121 +1,67 @@
 {% extends "base.html" %}
 {% block title %}{{ name }} — triage viewer{% endblock %}
-{% block crumbs %} / {% if not single %}<a href="/">trials</a> / {% endif %}<span>{{ name }}</span>{% endblock %}
+{% block subtitle %}{{ name }}{% if task_name %} · {{ task_name }}{% endif %}{% endblock %}
 {% block body %}
 
 <h1>{{ name }}</h1>
 <p class="kv muted">{{ task_name }} · {{ agent_name }} · <code>{{ model }}</code></p>
 
-<h2>① 原生侧信息</h2>
+{% set tabs = [('overview', '总览'), ('score', 'Trial 得分'), ('trace', '执行轨迹'),
+('tools', '工具分析'), ('diagnosis', '诊断')] %}
+<div class="tabs">
+  {% for key, label in tabs %}
+  <a class="tab{% if tab == key %} on{% endif %}" href="{{ base_url }}?tab={{ key }}">{{ label }}</a>
+  {% endfor %}
+</div>
 
+{% if tab == 'overview' %}
+{# ---------- 总览：元信息 + 结果/消耗 KPI + 阶段耗时 + 产物 ---------- #}
 <div class="grid">
-  <div class="card">
-    <h3>Outcome</h3>
-    <p>
-      {% if rewards.reward is none %}<span class="badge fail">no reward</span>
-      {% else %}<span class="badge {{ 'pass' if rewards.reward == 1 else 'fail' }}">reward {{ rewards.reward }}</span>{%
-      endif %}
-      {% if exception.exception_type %}<span class="badge fail">{{ exception.exception_type }}</span>{% endif %}
-    </p>
-    <table>
-      <tr>
-        <td>f2p</td>
-        <td>{{ rewards.f2p_passed | fmt }} / {{ rewards.f2p_total | fmt }}</td>
-      </tr>
-      <tr>
-        <td>p2p</td>
-        <td>{{ rewards.p2p_passed | fmt }} / {{ rewards.p2p_total | fmt }}</td>
-      </tr>
-      <tr>
-        <td>partial</td>
-        <td>{{ rewards.partial | fmt(4) }}</td>
-      </tr>
-    </table>
+  <div class="kpi">
+    <div class="k">Outcome</div>
+    <div class="v {{ 'good' if resolved else 'badc' }}">{{ 'Resolved' if resolved else 'Unresolved' }}</div>
+    <div class="n">
+      {% if reward is none %}无 reward{% else %}reward = {{ reward }}{% endif %}
+      {%- if exception.exception_type %} · {{ exception.exception_type }}{% endif %}
+    </div>
   </div>
-
-  <div class="card">
-    <h3>Tokens &amp; Cost</h3>
-    <table>
-      <tr>
-        <td>Input tokens</td>
-        <td>{{ tokens.input | fmt }}</td>
-      </tr>
-      <tr>
-        <td>Cache tokens</td>
-        <td>{{ tokens.cache | fmt }}</td>
-      </tr>
-      <tr>
-        <td>Output tokens</td>
-        <td>{{ tokens.output | fmt }}</td>
-      </tr>
-      <tr>
-        <td>Cost USD</td>
-        <td>{{ tokens.cost | fmt(4) }}</td>
-      </tr>
-    </table>
+  <div class="kpi">
+    <div class="k">Input tokens</div>
+    <div class="v">{{ tokens.input | fmt }}</div>
+    <div class="n">cache {{ tokens.cache | fmt }}</div>
   </div>
-
-  <div class="card">
-    <h3>Timing</h3>
-    <table>
-      {% for p in timing %}<tr>
-        <td>{{ p.label }}</td>
-        <td>{{ p.sec | secs }}</td>
-      </tr>{% endfor %}
-      <tr>
-        <td><b>Total</b></td>
-        <td><b>{{ total_sec | secs }}</b></td>
-      </tr>
-    </table>
+  <div class="kpi">
+    <div class="k">Output tokens</div>
+    <div class="v">{{ tokens.output | fmt }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">Cost USD</div>
+    <div class="v">{{ tokens.cost | fmt(4) }}</div>
   </div>
 </div>
 
+{% set colors = ['#94a3b8', '#60a5fa', '#2563eb', '#16a34a'] %}
+{% set parts = timing | rejectattr('sec', 'none') | list %}
+{% set phase_total = parts | sum(attribute='sec') %}
 <div class="card">
-  <h3>Verifier</h3>
-  {% if ctrf.summary %}
-  <p class="kv">tool <code>{{ ctrf.tool.name }}</code> · tests <b>{{ ctrf.summary.tests }}</b>
-    · passed <b>{{ ctrf.summary.passed }}</b> · failed <b>{{ ctrf.summary.failed }}</b></p>
-  {% else %}
-  <p class="kv muted">无 ctrf 报告</p>
-  {% endif %}
-  {% if ctrf.tests %}
-  {% set failed = ctrf.tests | selectattr('status', 'equalto', 'failed') | list %}
-  {% if failed %}
-  <details>
-    <summary>{{ failed | length }} failed tests</summary>
-    <table>
-      <tbody>
-        {% for t in failed[:15] %}<tr>
-          <td class="name">{{ t.name }}</td>
-        </tr>{% endfor %}
-      </tbody>
-    </table>
-  </details>
-  {% endif %}
-  {% endif %}
+  <h3>Timing（总 {{ total_sec | secs }}）</h3>
+  <div class="timeline">
+    {% for p in timing %}{% if p.sec %}
+    <div title="{{ p.label }}: {{ p.sec | secs }}"
+      style="width:{{ (p.sec / phase_total * 100) if phase_total else 0 }}%;background:{{ colors[loop.index0 % 4] }}">
+      {% if phase_total and (p.sec / phase_total) > 0.12 %}{{ p.label }} {{ p.sec | secs }}{% endif %}
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+  <div class="legend">
+    {% for p in timing %}
+    <span><i style="background:{{ colors[loop.index0 % 4] }}"></i>{{ p.label }} {{ p.sec | secs }}</span>
+    {% endfor %}
+  </div>
 </div>
 
-{% if exception.exception_type %}
-<div class="card">
-  <h3>Exception</h3>
-  <p class="kv"><span class="badge fail">{{ exception.exception_type }}</span>
-    <span class="muted">occurred_at {{ exception.occurred_at }}</span>
-  </p>
-  <details>
-    <summary>message</summary>
-    <pre>{{ exception.exception_message or '' }}</pre>
-  </details>
-  {% if exception.exception_traceback %}
-  <details>
-    <summary>traceback</summary>
-    <pre>{{ exception.exception_traceback }}</pre>
-  </details>
-  {% endif %}
-</div>
-{% endif %}
-
-<div class="card">
-  <h3>Artifacts</h3>
+<h2>Artifacts</h2>
+<div class="card" style="padding:0">
   <table>
     <thead>
       <tr>
@@ -135,21 +81,281 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="4" class="muted">无 manifest</td>
+        <td colspan="4" class="muted" style="text-align:center">无 manifest</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 
-<h2>② 诊断侧（analyze）</h2>
+{% elif tab == 'score' %}
+{# ---------- Trial 得分：reward 分项 + Verifier(CTRF) + 异常 ---------- #}
+{% if reward_items %}
+<div class="card">
+  <h3>Reward 分项（按数据集原样呈现）</h3>
+  <div class="grid">
+    {% for it in reward_items %}
+    <div class="kpi">
+      <div class="k">{{ it.key }}</div>
+      {% if it.ratio is not none %}
+      <div class="v">{{ it.passed }}/{{ it.total }}</div>
+      <div class="bar"><i style="width:{{ (it.ratio * 100) | round(1) }}%"></i></div>
+      <div class="n">{{ it.ratio | pct }}</div>
+      {% else %}
+      <div class="v">{{ it.value | fmt(4) }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<h2>Verifier（CTRF）</h2>
+{% if ctrf.summary %}
+<div class="grid">
+  <div class="kpi">
+    <div class="k">Tests</div>
+    <div class="v">{{ ctrf.summary.tests | fmt }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">Passed</div>
+    <div class="v good">{{ ctrf.summary.passed | fmt }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">Failed</div>
+    <div class="v {{ 'badc' if ctrf.summary.failed else 'good' }}">{{ ctrf.summary.failed | fmt }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">Skipped</div>
+    <div class="v">{{ ctrf.summary.skipped | fmt }}</div>
+  </div>
+</div>
+{% if ctrf.tool and ctrf.tool.name %}<p class="kv muted">tool <code>{{ ctrf.tool.name }}</code></p>{% endif %}
+{% set failed = ctrf.tests | selectattr('status', 'equalto', 'failed') | list %}
+{% if ctrf.tests %}
+<div class="card" style="padding:0;margin-top:1rem">
+  <details open>
+    <summary style="padding:.6rem 1rem">测试用例 {{ ctrf.tests | length }} 条{% if failed %} · 失败
+      {{ failed | length }}{% endif %}</summary>
+    <div style="max-height:460px;overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>状态</th>
+            <th>用例</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in ctrf.tests %}
+          <tr>
+            <td>
+              {%- if t.status == 'passed' %}<span class="badge b-ok">pass</span>
+              {%- elif t.status == 'failed' %}<span class="badge b-bad">fail</span>
+              {%- else %}<span class="badge b-neu">{{ t.status }}</span>{% endif %}
+            </td>
+            <td class="name">{{ t.name }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+{% endif %}
+{% else %}
+<div class="card empty">无 ctrf 报告</div>
+{% endif %}
+
+<h2>Exception</h2>
+{% if exception.exception_type %}
+<div class="card">
+  <p class="kv"><span class="badge b-bad">{{ exception.exception_type }}</span>
+    <span class="muted">occurred_at {{ exception.occurred_at }}</span>
+  </p>
+  <details>
+    <summary>message</summary>
+    <pre>{{ exception.exception_message or '' }}</pre>
+  </details>
+  {% if exception.exception_traceback %}
+  <details>
+    <summary>traceback</summary>
+    <pre>{{ exception.exception_traceback }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% else %}
+<div class="card empty">无异常</div>
+{% endif %}
+
+{% elif tab == 'trace' %}
+{# ---------- 执行轨迹：逐步 message / reasoning / 工具 / observation ---------- #}
+{% if trajectory and trajectory.n_steps %}
+{% set ns = namespace(mx=1, ptok=0, ctok=0) %}
+{% for s in trajectory.steps %}
+{% set tot = (s.ptok or 0) + (s.ctok or 0) %}
+{% set ns.ptok = ns.ptok + (s.ptok or 0) %}
+{% set ns.ctok = ns.ctok + (s.ctok or 0) %}
+{% if tot > ns.mx %}{% set ns.mx = tot %}{% endif %}
+{% endfor %}
+<div class="grid">
+  <div class="kpi">
+    <div class="k">步数</div>
+    <div class="v">{{ trajectory.n_steps }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">工具调用</div>
+    <div class="v">{{ trajectory.flat_calls | length }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">输入 tokens</div>
+    <div class="v">{{ ns.ptok | fmt }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">输出 tokens</div>
+    <div class="v">{{ ns.ctok | fmt }}</div>
+  </div>
+</div>
+<div class="card">
+  <h3>每步 token 用量</h3>
+  <div class="tokchart">
+    {% for s in trajectory.steps %}
+    {% set tot = (s.ptok or 0) + (s.ctok or 0) %}
+    <a href="{{ base_url }}?tab=trace&step={{ s.i }}#step-{{ s.i }}" title="第 {{ s.i }} 步 · {{ tot }} token">
+      <i style="height:{{ (tot / ns.mx * 100) | round(1) }}%"></i>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<h2>逐步明细（{{ trajectory.n_steps }} 步）</h2>
+{% for s in trajectory.steps %}
+{% set is_open = loop.first or (step and (s.i | string) == step) %}
+<details class="step" id="step-{{ s.i }}" {{ ' open' if is_open else '' }}>
+  <summary>
+    <b>#{{ s.i }}</b>
+    <span class="who {{ s.src }}">{{ s.src or 'agent' }}</span>
+    {% if s.dur is not none %}<span class="muted">{{ s.dur | secs }}</span>{% endif %}
+    {% if s.tools %}<span class="badge b-neu">{{ s.tools | length }} 工具</span>{% endif %}
+    {% if s.truncated %}<span class="badge b-neu">截断</span>{% endif %}
+  </summary>
+  <div class="body">
+    {% if s.msg %}<div class="lab">message</div>
+    <div class="msg">{{ s.msg }}</div>{% endif %}
+    {% if s.reasoning %}<div class="lab">reasoning</div>
+    <div class="msg">{{ s.reasoning }}</div>{% endif %}
+    {% for t in s.tools %}
+    <div class="lab">tool · {{ t.fn }}</div>
+    {% if t.kind == 'cmd' %}<div class="cmd">{{ t.text }}</div>
+    {% else %}<div class="fn">{{ t.text }}</div>{% endif %}
+    {% if t.out %}<details>
+      <summary>output</summary>
+      <pre>{{ t.out }}</pre>
+    </details>{% endif %}
+    {% endfor %}
+    {% if s.obs %}<div class="lab">observation</div>
+    <pre>{{ s.obs }}</pre>{% endif %}
+  </div>
+</details>
+{% endfor %}
+{% else %}
+<div class="card empty">无轨迹数据（<code>agent/trajectory.json</code> 不存在）。</div>
+{% endif %}
+
+{% elif tab == 'tools' %}
+{# ---------- 工具分析：调用聚合 + 逐次明细 ---------- #}
+{% if trajectory and trajectory.tool_totals.n_calls %}
+{% set tt = trajectory.tool_totals %}
+<div class="grid">
+  <div class="kpi">
+    <div class="k">调用次数</div>
+    <div class="v">{{ tt.n_calls }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">工具种类</div>
+    <div class="v">{{ tt.n_kinds }}</div>
+  </div>
+  <div class="kpi">
+    <div class="k">最常用</div>
+    <div class="v">{{ tt.top_fn or '—' }}</div>
+    <div class="n">{{ tt.top_count }} 次</div>
+  </div>
+  <div class="kpi">
+    <div class="k">步耗时合计</div>
+    <div class="v">{{ tt.step_total_dur | secs }}</div>
+    <div class="n">均 {{ tt.step_avg_dur | secs }} · 峰 {{ tt.step_max_dur | secs }}</div>
+  </div>
+</div>
+
+<h2>工具聚合</h2>
+<div class="card" style="padding:0">
+  <table>
+    <thead>
+      <tr>
+        <th>工具</th>
+        <th class="num">次数</th>
+        <th class="num">合计耗时</th>
+        <th class="num">均耗时</th>
+        <th class="num">中位</th>
+        <th class="num">峰值</th>
+        <th class="num">并行调用</th>
+        <th>样例</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in trajectory.tool_stats %}
+      <tr>
+        <td class="name">{{ s.fn }}</td>
+        <td class="num">{{ s.count }}</td>
+        <td class="num">{{ s.total_dur | secs }}</td>
+        <td class="num">{{ s.avg_dur | secs }}</td>
+        <td class="num">{{ s.median_dur | secs }}</td>
+        <td class="num">{{ s.max_dur | secs }}</td>
+        <td class="num">{{ s.parallel }}</td>
+        <td class="name">{{ s.sample or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>调用明细（按步序）</h2>
+<div class="card" style="padding:0">
+  <table>
+    <thead>
+      <tr>
+        <th class="num">步</th>
+        <th>工具</th>
+        <th>命令 / 参数</th>
+        <th class="num">耗时</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in trajectory.flat_calls %}
+      <tr>
+        <td class="num">{{ c.step }}</td>
+        <td class="name">{{ c.fn }}</td>
+        <td class="name">{{ c.cmd }}</td>
+        <td class="num">{{ c.dur | secs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">无轨迹数据（<code>agent/trajectory.json</code> 不存在）。</div>
+{% endif %}
+
+{% else %}
+{# ---------- 诊断：本 case 的 analysis.md ---------- #}
+<h2>诊断（analyze）</h2>
 {% if analysis_md %}
 <div class="card md">{{ analysis_md | safe }}</div>
 {% else %}
-<div class="card muted">
+<div class="card empty">
   无诊断产物（<code>triage-kit/analysis.md</code> 不存在）。运行
   <code>triage analyze</code> 后可补齐诊断渲染。
 </div>
+{% endif %}
 {% endif %}
 
 {% endblock %}

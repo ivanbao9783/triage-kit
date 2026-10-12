@@ -3,15 +3,19 @@
 
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}triage viewer{% endblock %}</title>
   <style>
     :root {
-      --pass: #16a34a;
-      --fail: #dc2626;
-      --na: #6b7280;
-      --line: #e5e7eb;
-      --muted: #6b7280;
-      --bg: #f8fafc;
+      --bg: #f5f6f8;
+      --card: #fff;
+      --ink: #1c2330;
+      --sub: #66707f;
+      --line: #e3e6ec;
+      --acc: #2563eb;
+      --ok: #16a34a;
+      --bad: #dc2626;
+      --chip: #eef2f7;
     }
 
     * {
@@ -19,14 +23,14 @@
     }
 
     body {
-      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
       margin: 0;
-      color: #111827;
+      font: 14px/1.6 -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
       background: var(--bg);
     }
 
     a {
-      color: #2563eb;
+      color: var(--acc);
       text-decoration: none;
     }
 
@@ -35,22 +39,95 @@
     }
 
     header.top {
-      background: #fff;
-      border-bottom: 1px solid var(--line);
-      padding: .7rem 1.5rem;
-      font-size: .85rem;
-      color: var(--muted);
+      background: #111827;
+      color: #fff;
+      padding: 12px 22px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 14px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+
+    header.top .brand {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    header.top .brand a {
+      color: #fff;
+    }
+
+    header.top .sub {
+      color: #9aa4b2;
+      font-size: 12px;
+    }
+
+    .wrap {
+      display: flex;
+      align-items: flex-start;
+      min-height: calc(100vh - 52px);
+    }
+
+    nav {
+      width: 230px;
+      flex-shrink: 0;
+      background: var(--card);
+      border-right: 1px solid var(--line);
+      position: sticky;
+      top: 52px;
+      align-self: flex-start;
+      max-height: calc(100vh - 52px);
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    nav .grp {
+      font-size: 11px;
+      color: var(--sub);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin: 8px 4px 6px;
+      word-break: break-all;
+    }
+
+    nav .item {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--ink);
+      word-break: break-all;
+    }
+
+    nav .item:hover {
+      background: var(--chip);
+      text-decoration: none;
+    }
+
+    nav .item.on {
+      background: var(--acc);
+      color: #fff;
+    }
+
+    nav .item.on .badge {
+      background: rgba(255, 255, 255, .25);
+      color: #fff;
     }
 
     main {
-      max-width: 1100px;
-      margin: 1.5rem auto;
-      padding: 0 1.5rem;
+      flex: 1;
+      min-width: 0;
+      padding: 20px 24px;
+      max-width: 1180px;
     }
 
     h1 {
-      font-size: 1.3rem;
+      font-size: 1.35rem;
       margin: .2rem 0 .4rem;
+      word-break: break-all;
     }
 
     h2 {
@@ -61,11 +138,11 @@
     }
 
     h3 {
-      font-size: .85rem;
+      font-size: .75rem;
       margin: .2rem 0 .8rem;
-      color: #374151;
+      color: var(--sub);
       text-transform: uppercase;
-      letter-spacing: .03em;
+      letter-spacing: .04em;
     }
 
     code {
@@ -76,17 +153,17 @@
     }
 
     .card {
-      background: #fff;
+      background: var(--card);
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 1rem 1.2rem;
+      padding: 1rem 1.1rem;
       margin-bottom: 1rem;
     }
 
     .grid {
       display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     }
 
     table {
@@ -105,54 +182,165 @@
 
     th {
       font-size: .7rem;
+      font-weight: 600;
       text-transform: uppercase;
       letter-spacing: .03em;
-      color: var(--muted);
+      color: var(--sub);
+    }
+
+    .filters {
+      margin: .1rem 0 .8rem;
+      font-size: .85rem;
+      color: var(--sub);
+    }
+
+    .filters a {
+      display: inline-block;
+      padding: .18rem .65rem;
+      margin-right: .4rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .filters a:hover {
+      text-decoration: none;
+      border-color: var(--acc);
+      color: var(--acc);
+    }
+
+    .filters a.active {
+      background: #111827;
+      color: #fff;
+      border-color: #111827;
     }
 
     tr:last-child td {
       border-bottom: 0;
     }
 
+    tbody tr:hover td {
+      background: #fafbfc;
+    }
+
+    td.num,
+    th.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
     td.name {
       font-family: ui-monospace, monospace;
-      white-space: nowrap;
       font-size: .82rem;
+      word-break: break-all;
+    }
+
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .kpi .k {
+      font-size: 12px;
+      color: var(--sub);
+    }
+
+    .kpi .v {
+      font-size: 21px;
+      font-weight: 700;
+      margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+      word-break: break-all;
+    }
+
+    .kpi .v.good {
+      color: var(--ok);
+    }
+
+    .kpi .v.badc {
+      color: var(--bad);
+    }
+
+    .kpi .n {
+      font-size: 11px;
+      color: var(--sub);
+      margin-top: 2px;
+    }
+
+    .bar {
+      height: 8px;
+      background: var(--chip);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .bar i {
+      display: block;
+      height: 100%;
+      background: var(--ok);
     }
 
     .badge {
       display: inline-block;
-      padding: .12rem .5rem;
+      padding: .1rem .5rem;
       border-radius: 999px;
-      font-size: .72rem;
+      font-size: .7rem;
       font-weight: 600;
+    }
+
+    .b-ok {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    .b-bad {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .b-neu {
+      background: var(--chip);
+      color: var(--sub);
+    }
+
+    .timeline {
+      display: flex;
+      height: 26px;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 10px;
+      font-size: 11px;
       color: #fff;
     }
 
-    .pass {
-      background: var(--pass)
+    .timeline div {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
-    .fail {
-      background: var(--fail)
+    .legend {
+      display: flex;
+      gap: 14px;
+      font-size: 11px;
+      color: var(--sub);
+      margin-top: 6px;
+      flex-wrap: wrap;
     }
 
-    .not_applicable {
-      background: var(--na)
-    }
-
-    .kv {
-      font-size: .9rem;
-      color: #374151;
-      margin: .35rem 0;
-    }
-
-    .kv b {
-      color: #111827;
-    }
-
-    .muted {
-      color: var(--muted)
+    .legend i {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: -1px;
     }
 
     pre {
@@ -188,10 +376,6 @@
       margin: .9rem 0 .3rem;
     }
 
-    .md table {
-      margin: .6rem 0;
-    }
-
     .md td,
     .md th {
       font-size: .85rem;
@@ -199,36 +383,226 @@
 
     details summary {
       cursor: pointer;
-      color: var(--muted);
+      color: var(--sub);
       font-size: .85rem;
     }
 
-    .filters {
-      margin: .1rem 0 .8rem;
-      font-size: .85rem;
-      color: var(--muted);
+    details summary:hover {
+      color: var(--ink);
     }
 
-    .filters a {
+    .empty {
+      color: var(--sub);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .muted {
+      color: var(--sub);
+    }
+
+    .kv {
+      font-size: .9rem;
+      color: #374151;
+      margin: .35rem 0;
+    }
+
+    /* tab bar — URL-param driven (?tab=), so it stays JS-free */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--line);
+      margin: .6rem 0 1.1rem;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--sub);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+
+    .tab:hover {
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .tab.on {
+      color: var(--acc);
+      border-bottom-color: var(--acc);
+      font-weight: 600;
+    }
+
+    /* trajectory rendering */
+    .who {
       display: inline-block;
-      padding: .18rem .6rem;
-      margin-right: .4rem;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #fff;
+      padding: .05rem .45rem;
+      border-radius: 4px;
+      font-size: .68rem;
+      font-weight: 600;
+      background: var(--chip);
+      color: var(--sub);
     }
 
-    .filters a.active {
-      background: #111827;
-      color: #fff;
-      border-color: #111827;
+    .who.agent,
+    .who.assistant {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .who.user {
+      background: #fef9c3;
+      color: #854d0e;
+    }
+
+    .who.system {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .cmd {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: .35rem .6rem;
+      border-radius: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: .78rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: .25rem 0;
+    }
+
+    .fn {
+      font-family: ui-monospace, monospace;
+      font-size: .78rem;
+      color: #7c3aed;
+      word-break: break-all;
+      margin: .25rem 0;
+    }
+
+    .lab {
+      font-size: .66rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--sub);
+      margin-top: .55rem;
+    }
+
+    .msg {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: .85rem;
+      color: #374151;
+      margin: .15rem 0;
+    }
+
+    details.step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: .55rem;
+      background: var(--card);
+    }
+
+    details.step>summary {
+      padding: .5rem .75rem;
+      display: flex;
+      gap: .5rem;
+      align-items: baseline;
+      flex-wrap: wrap;
+      font-size: .85rem;
+    }
+
+    details.step>summary:hover {
+      background: #fafbfc;
+    }
+
+    details.step .body {
+      padding: .2rem .85rem .8rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .tokchart {
+      display: flex;
+      gap: 2px;
+      align-items: flex-end;
+      height: 56px;
+      margin: 10px 0 0;
+    }
+
+    .tokchart a {
+      flex: 1;
+      min-width: 2px;
+      height: 100%;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .tokchart i {
+      display: block;
+      width: 100%;
+      min-height: 2px;
+      background: var(--acc);
+      border-radius: 2px 2px 0 0;
+    }
+
+    .tokchart a:hover i {
+      background: #1d4ed8;
+    }
+
+    @media (max-width: 920px) {
+      .wrap {
+        flex-direction: column;
+      }
+
+      nav {
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        position: static;
+        max-height: 240px;
+      }
+
+      main {
+        padding: 16px 12px;
+      }
+    }
+
+    @media print {
+      nav {
+        display: none;
+      }
+
+      header.top {
+        position: static;
+      }
     }
   </style>
 </head>
 
 <body>
-  <header class="top"><a href="/">triage viewer</a>{% block crumbs %}{% endblock %}</header>
-  <main>{% block body %}{% endblock %}</main>
+  <header class="top">
+    <span class="brand"><a href="/">triage viewer</a></span>
+    <span class="sub">{% block subtitle %}{% endblock %}</span>
+  </header>
+  <div class="wrap">
+    <nav>
+      {% if nav_trials %}
+      <div class="grp">{{ job_name }}</div>
+      {% for t in nav_trials %}
+      <a class="item{% if t.name == current %} on{% endif %}" href="/trial/{{ t.name }}">
+        <span class="badge {{ 'b-ok' if t.resolved else 'b-bad' }}">{{ '✓' if t.resolved else '✗' }}</span>
+        {{ t.name }}
+      </a>
+      {% endfor %}
+      {% elif current %}
+      <div class="grp">Trial</div>
+      <span class="item on">{{ current }}</span>
+      {% endif %}
+    </nav>
+    <main>{% block body %}{% endblock %}</main>
+  </div>
 </body>
 
 </html>
