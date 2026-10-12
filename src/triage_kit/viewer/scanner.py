@@ -19,8 +19,6 @@ from triage_kit.core import task_reader, trial_reader
 PRODUCTS_DIR = "triage-kit"
 ANALYSIS_JSON = "analysis.json"
 ANALYSIS_MD = "analysis.md"
-CHECK_RESULT_JSON = "check-result.json"
-CHECK_RESULT_MD = "check-result.md"
 
 # Native timing phases, in display order: (result.json key, label).
 _PHASES = (

@@ -24,7 +24,7 @@ HERE = Path(__file__).parent
 TABS = ("overview", "score", "trace", "tools", "diagnosis")
 
 # 'commonmark' lacks the table/strikethrough rules, but real product
-# marksdown (job aggregates) uses pipe tables — enable them explicitly.
+# markdown (job aggregates) uses pipe tables — enable them explicitly.
 _md = MarkdownIt("commonmark", {"linkify": True}).enable(
     ["table", "strikethrough"]
 )
@@ -75,7 +75,6 @@ def create_app(root: Path) -> FastAPI:
         tab = tab if tab in TABS else "overview"
         data = scanner.load_trial(trial_dir)
         data["root"] = root
-        data["single"] = single
         data["analysis_md"] = _to_html(data["analysis_md"])
         data["tab"] = tab
         # the trace tab's token bars deep-link to a step; the value is a

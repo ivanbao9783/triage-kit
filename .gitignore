@@ -16,3 +16,7 @@ build/
 .DS_Store
 Thumbs.db
 .idea/
+
+# E2E runtime products — a completed pass keeps its triage-kit/ dirs in
+# place as review material, but they are regenerated output, not fixtures.
+triage-kit/
