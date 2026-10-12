@@ -25,3 +25,4 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P012 | Claude Agent SDK backend as the primary (and only) harness | refactor | high | landed | [P012-claude-backend-primary.md](docs/proposals/P012-claude-backend-primary.md) |
 | P013 | Judge sandbox gap on the claude backend path | feature | medium | proposed | [P013-judge-sandbox-claude-path.md](docs/proposals/P013-judge-sandbox-claude-path.md) |
 | P014 | check batch mode & human-readable products | feature | medium | building | [P014-check-batch-and-readable.md](docs/proposals/P014-check-batch-and-readable.md) |
+| P015 | E2E mini dataset (fixed 3-task / 3-trial fixtures) | feature | medium | building | [P015-e2e-mini-dataset.md](docs/proposals/P015-e2e-mini-dataset.md) |

