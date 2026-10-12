@@ -27,11 +27,13 @@ export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic  # or Anthropic off
 ```
 
 Default model below: `deepseek-flash` (substitute as needed). Run
-from the repo root. Before each full pass, restore the dataset:
+from the repo root.
 
-```bash
-triage clean tests/e2e/data --yes
-```
+Products are intentionally kept after a pass — they are the review
+material for rubric/prompt quality and the input for the future
+diagnosis viewer (P006). Only when you need a fresh live pass (no
+cache hits) run `triage clean tests/e2e/data --yes` first, and note
+it wipes the previous pass's products.
 
 ## Command matrix
 
@@ -113,16 +115,20 @@ the analysis references real task requirement details (evidence the
 override fed the actual task files, not the degraded section);
 `run.log` at the trial level.
 
-### 7. Restore — dry-run then delete
+## After the pass — products stay
 
-```bash
-triage clean tests/e2e/data            # lists ~5 triage-kit/ dirs
-triage clean tests/e2e/data --yes      # removes them
-```
+All `triage-kit/` products remain under `tests/e2e/data/` after the
+matrix completes. Use them to:
 
-Expected: dry-run names every product dir, deletes nothing; `--yes`
-removes all; original dataset files untouched (git status clean
-except nothing new).
+- **Review rubric & prompt quality** (deferred to the next E2E pass):
+  suspicious verdicts in `check-result.json` → the criterion text in
+  `check-rubric.toml`; attribution-vs-reward consistency in
+  `analysis.json` → the prompt templates and `analyze-rubric.toml`.
+- **Feed the diagnosis viewer** (P006): the product tree is exactly
+  the viewer's input shape.
+
+`triage clean` remains available as a standalone command for manual
+cleanup when a fresh pass is needed (see Prerequisites).
 
 ## Recording results
 

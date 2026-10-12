@@ -26,8 +26,8 @@ TRIALS = [
 
 def _fixture_names(directory: Path) -> list[str]:
     """Fixture directory names, ignoring triage-kit/ runtime products
-    (an E2E run in progress — or awaiting step-7 clean — legitimately
-    leaves product dirs next to the fixtures)."""
+    (a completed E2E pass intentionally keeps its products in place —
+    they are review material and future viewer input)."""
     return sorted(
         d.name for d in directory.iterdir() if d.name != "triage-kit"
     )
