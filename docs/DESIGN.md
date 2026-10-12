@@ -365,7 +365,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 - **缓存命中不补齐新产物**：功能升级新增产物文件后，旧缓存目录需 `--force` 或手动补齐
 - **task 目录跨机失效是主路径**：Linux 产出的 result.json 拷贝到 Windows 后 task path 必然不可解析，task_section 的降级话术（"infer from trajectory"）在跨机场景是常态而非边缘；DeepSWE 样本中 mini-swe-agent 轨迹内嵌完整任务 prompt，降级路径实测可用，但不具普遍性
 - **job 模式不透传 --task-dir**：一个 job 的多个 trial 可能来自不同任务，单一路径无法覆盖
-- **viewer 仍仅 analyze 入口**（P006）：check/tasks 入口为同一特性的后续 landing（遇 tasks 目录显式拒绝）。**已落地**单 trial 五页签（总览 / 得分 / 轨迹 / 工具 / 诊断）、执行轨迹时间线与工具调用分析（`viewer/trajectory.py` 解析 ATIF）、结构化 verifier 用例表（CTRF 全量 pass/fail）、Reward 独立筛选行与 UI token 化美化；**未实现** criteria 热力图/matrix（跨 trial × 维度的聚合视图）
+- **viewer 仍仅 analyze 入口**（P006）：check/tasks 入口为同一特性的后续 landing（遇 tasks 目录显式拒绝）。**已落地**单 trial 五页签（总览 / 得分 / 轨迹 / 工具 / 诊断）、执行轨迹时间线与工具调用分析（`viewer/trajectory.py` 解析 ATIF）、结构化 verifier 用例表（CTRF 全量 pass/fail）、Reward 独立筛选行与 UI token 化美化；**未实现** criteria 热力图/matrix（跨 trial × 维度的聚合视图，已记录为低优先级 P016）
 - **assets 解析假定 editable 安装**：`core/assets.py` 以包位置回溯仓库根的 `assets/`，仅在 `pip install -e` 下成立；发布 PyPI 前需改为包资源解析（`importlib.resources`）并将 assets 声明为包数据
 - **rubric 质量的既知局限**：default rubric 为标准 Harbor 模板任务设计，对高工程化数据集存在已知误判点（#3/#4/#5/#7/#11，详见 KNOWN-ISSUES）；check 的真实价值场景是**新任务入库门禁**，而非给成熟数据集复检
 - **check 文案与上游的可同步性**：check.txt 仅改首句的项目名（改为 "a Harbor task"），其余逐字节保留，将来 Harbor 上游 rubric/prompt 更新可 diff 同步
