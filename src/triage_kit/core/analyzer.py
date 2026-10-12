@@ -4,8 +4,8 @@ The Analyzer owns the analyze (badcase attribution) workflow. All LLM access
 goes through the AgentBackend contract, so the orchestration is fully
 testable with a fake backend and works with any real harness.
 
-Job mode runs trials through a bounded thread pool (P003: `-j/--jobs`,
-default 1). Results fold in directory order after the join, so products
+Job mode runs trials through a bounded thread pool (`-j/--jobs`, default
+1). Results fold in directory order after the join, so products
 are identical for any j over the same trial set; per-trial failures are
 collected (never raised out of a worker) and reported via failed_trials.
 """
@@ -25,7 +25,7 @@ from triage_kit.core.schema import build_analyze_response_schema
 logger = logging.getLogger(__name__)
 
 # Current item (trial in analyze-job mode, task in check-batch mode) for
-# log attribution under concurrency (P003; shared by P014). ContextVars
+# log attribution under concurrency. ContextVars
 # are per-thread: each pool worker sees only its own value, so concurrent
 # items cannot leak into each other's log context.
 _current_item: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -80,8 +80,8 @@ _DEGRADED_TASK_SECTION = (
     "Use the trajectory and test output to infer what the task required."
 )
 
-# Shared zh-composition rules block (P009 route B). Public: the Checker
-# reuses it for check-result.md composition (P014 D3).
+# Shared zh-composition rules block. Public: the Checker reuses it for
+# check-result.md composition.
 ZH_COMPOSE_RULES = (
     "你是一名资深评测诊断工程师。请基于下方提供的诊断材料，"
     "用中文撰写一份诊断报告。\n"
@@ -191,7 +191,7 @@ class Analyzer:
             logger.info("cache hit: reusing cached analysis")
             return cached
 
-        # P011: start/finish markers live here (not in the pool worker)
+        # Start/finish markers live here (not in the pool worker)
         # so the single-trial path logs the same run trace as job mode.
         logger.info("analysis start")
         task_dir = trial_reader.extract_task_dir(trial_dir, override=task_dir)
@@ -218,10 +218,9 @@ class Analyzer:
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "analysis.json", analysis)
         if self.lang == "zh":
-            # P009 route B: --lang zh composes the human-readable
-            # report natively in Chinese directly as analysis.md (the
-            # English JSON stays the contract artifact; analysis.zh.md
-            # is retired).
+            # --lang zh composes the human-readable report natively in
+            # Chinese directly as analysis.md; the English JSON stays the
+            # contract artifact.
             self._compose_zh_report(
                 products_dir, _ZH_TRIAL_COMPOSE, "analysis.md",
                 json.dumps(analysis, ensure_ascii=False, indent=2),
@@ -255,7 +254,7 @@ class Analyzer:
             trial_reader.list_trials(job_dir, failing_only=failing_only)
         )
 
-        # Bounded pool for every j (P003). At j=1 the single FIFO worker
+        # Bounded pool for every j. At j=1 the single FIFO worker
         # preserves submission order, so call order equals listing order
         # — one code path for both modes, no sequential special case.
         with ThreadPoolExecutor(max_workers=self.jobs) as pool:
@@ -305,8 +304,8 @@ class Analyzer:
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "analysis.json", result)
         if self.lang == "zh":
-            # P009 route B: the job report is composed natively in
-            # Chinese directly as analysis.md (see analyze_trial).
+            # The job report is composed natively in Chinese directly as
+            # analysis.md (see analyze_trial).
             self._compose_zh_report(
                 products_dir, _ZH_JOB_COMPOSE, "analysis.md", summary
             )

@@ -97,7 +97,7 @@ class TestDetectMode:
         assert scanner.detect_mode(tmp_path) == "job"
 
     def test_tasks_root_rejected_as_check_unsupported(self, tmp_path):
-        """总纲领：tasks 目录属于 check，本期不支持 → 专用错误。"""
+        """tasks 目录属于 check 模式，本版本不支持 → 专用错误。"""
         make_task(tmp_path / "task-a")
         with pytest.raises(scanner.CheckModeUnsupported):
             scanner.detect_mode(tmp_path)

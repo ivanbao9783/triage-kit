@@ -1,4 +1,4 @@
-"""Plain-JSON discovery of triage-kit products for the viewer (P006).
+"""Plain-JSON discovery of triage-kit products for the viewer.
 
 Reads the ``<dir>/triage-kit/`` sub-directory layout (DESIGN.md §7) with
 no upstream model dependency — products are consumed as dicts, so
@@ -35,11 +35,11 @@ _REWARD_KEYS = ("reward", "f2p_passed", "f2p_total", "p2p_passed",
 
 
 class CheckModeUnsupported(ValueError):
-    """The target is a check (tasks) input — not in this P006 landing.
+    """The target is a check (tasks) input, which this release does not serve.
 
     analyze (trials) and check (tasks) are peer, mutually-exclusive
-    modes; the tasks path ships in a later landing, so it is rejected
-    explicitly instead of being silently mixed with analyze.
+    modes; the tasks view is not implemented yet, so such a target is
+    rejected explicitly instead of being silently mixed with analyze.
     """
 
 

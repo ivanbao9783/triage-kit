@@ -35,7 +35,7 @@ class TestOverviewRoute:
         assert r.status_code == 200
         assert "a__1" in r.text and "b__2" in r.text
         assert "Job Summary" in r.text
-        # the markdown pipe table must become a real HTML table (P006 D5)
+        # the markdown pipe table must become a real HTML table
         assert "<table>" in r.text
 
     def test_reward_filter_zero_keeps_only_failures(self, job):

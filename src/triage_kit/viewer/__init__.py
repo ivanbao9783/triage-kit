@@ -1,4 +1,4 @@
-"""Local read-only viewer for triage-kit diagnosis products (P006).
+"""Local read-only viewer for triage-kit diagnosis products.
 
 The viewer is deliberately split in two:
 

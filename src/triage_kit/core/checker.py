@@ -1,7 +1,7 @@
 """Task quality inspection: judge task directories against a rubric.
 
 Mirrors the Analyzer pattern (same backend contract, same rubric
-compilation). Single mode judges one task directory; batch mode (P014)
+compilation). Single mode judges one task directory; batch mode
 checks every task directory one level under a root through a bounded
 thread pool, folding failures instead of raising them. Products land in
 <dir>/triage-kit/ — the subdirectory keeps the task tree clean of triage
@@ -37,7 +37,7 @@ _PRODUCTS_DIR = "triage-kit"
 
 
 def _render_check_md(result: dict, task_name: str) -> str:
-    """Mechanical human-readable rendering of a check result (P014 D3)."""
+    """Mechanical human-readable rendering of a check result."""
     lines = [f"# Task Check: {task_name}", ""]
     for name, check in result["checks"].items():
         lines.append(f"## {name}: {check['outcome']}")
@@ -48,7 +48,7 @@ def _render_check_md(result: dict, task_name: str) -> str:
 
 
 def _zh_check_compose(task_name: str) -> str:
-    """zh compose instruction for check-result.md (P014 D3, P009 rules).
+    """zh compose instruction for check-result.md.
 
     The task name is embedded here because the check JSON payload —
     unlike the analyze payload — carries no task name.
@@ -104,8 +104,8 @@ class Checker:
             logger.info("cache hit: reusing cached check result")
             return cached, True
 
-        # P011 parity with the Analyzer: explicit start/finish markers
-        # so the persisted run.log carries a readable run trace.
+        # Start/finish markers, matching the Analyzer, so the persisted
+        # run.log carries a readable run trace.
         logger.info("check start")
         errors = validate_task_dir(task_dir)
         if errors:
@@ -131,8 +131,8 @@ class Checker:
         products_dir.mkdir(exist_ok=True)
         cache.write_json(products_dir / "check-result.json", result)
         if self.lang == "zh":
-            # P014 D3 (P009 route B semantics): --lang zh composes
-            # check-result.md natively in Chinese; the JSON stays English.
+            # --lang zh composes check-result.md natively in Chinese;
+            # the JSON stays English.
             composed, _meta = self.backend.query(
                 _zh_check_compose(task_dir.name)
                 + json.dumps(result, ensure_ascii=False, indent=2),
@@ -160,7 +160,7 @@ class Checker:
         """Pool worker: check one task under the log-prefix contextvar.
 
         Never raises — failures travel back as the last tuple element and
-        are folded into failed_tasks after the join (P014 D4).
+        are folded into failed_tasks after the join.
         """
         with log_item_scope(task_dir.name):
             try:
@@ -170,7 +170,7 @@ class Checker:
                 return task_dir.name, None, False, exc
 
     def check_batch(self, root: Path) -> dict:
-        """P014 D1/D2/D4: check every task directory one level under root.
+        """Check every task directory one level under root.
 
         Runs through a bounded pool; results fold in directory order, so
         the summary is j-invariant over the same task set. The summary is
@@ -192,7 +192,7 @@ class Checker:
             failed_tasks: list[str] = []
             # Consume in listing order — result() blocks on that specific
             # task — so failed_tasks and per_criterion counts are
-            # j-invariant (P003 pattern, P014 D4).
+            # j-invariant.
             for task_dir, future in zip(task_dirs, futures):
                 _name, result, cached, exc = future.result()
                 if exc is not None:

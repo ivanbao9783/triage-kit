@@ -248,7 +248,7 @@ class TestCheckTask:
 
 
 class TestCheckMd:
-    """P014 D3: check-result.md —— en 机械渲染 / zh 原生撰写（P009 语义）。"""
+    """check-result.md —— en 机械渲染 / zh 原生撰写。"""
 
     def test_en_writes_mechanical_md(self, task, rubric, good_response):
         """en 默认：md 由 JSON 机械渲染，零额外 LLM 调用。"""
@@ -296,7 +296,7 @@ class TestCheckMd:
                     lang="zh").check_task(task)
 
     def test_cache_hit_skips_md_hop(self, task, rubric, good_response):
-        """P009 决策 (i) 对齐：缓存命中不 compose，md 不写。"""
+        """缓存命中不 compose，md 不写。"""
         from triage_kit.core.checker import Checker
 
         cached = {"checks": {
@@ -319,7 +319,7 @@ class TestCheckMd:
 
 
 class TestCheckBatch:
-    """P014 D1/D2/D4: 批量模式 —— 一层扫描、确定性汇总、失败折叠。"""
+    """批量模式 —— 一层扫描、确定性汇总、失败折叠。"""
 
     def test_jobs_below_one_rejected(self, rubric):
         from triage_kit.core.checker import Checker
@@ -358,7 +358,7 @@ class TestCheckBatch:
             assert (tmp_path / name / TK / MD).is_file()
 
     def test_batch_counts_cache_hits(self, tmp_path, rubric, good_response):
-        """缓存命中的 task 计 cached：不调 LLM、不写 md（决策 (i)）。"""
+        """缓存命中的 task 计 cached：不调 LLM、不写 md。"""
         from triage_kit.core.checker import Checker
 
         make_task(tmp_path / "t1")
@@ -388,7 +388,7 @@ class TestCheckBatch:
     def test_single_failure_folded_not_raised(
         self, tmp_path, rubric, good_response, caplog
     ):
-        """D4: 坏 task 落 failed_tasks 并有 ERROR 行点名，兄弟照常。"""
+        """坏 task 落 failed_tasks 并有 ERROR 行点名，兄弟照常。"""
         import logging as logging_mod
 
         from triage_kit.core.checker import Checker
@@ -492,7 +492,7 @@ class TestCheckBatch:
         assert summary["checked"] == 2
 
     def test_nested_task_dirs_not_discovered(self, tmp_path):
-        """D1: 一层扫描 —— 孙目录任务不进批量，非任务目录被忽略。"""
+        """一层扫描 —— 孙目录任务不进批量，非任务目录被忽略。"""
         from triage_kit.core.task_reader import list_task_dirs
 
         make_task(tmp_path / "t1")

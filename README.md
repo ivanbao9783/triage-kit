@@ -53,7 +53,7 @@ cat path/to/tasks/triage-kit/check-summary.json   # deterministic totals
 ## Installation
 
 ```bash
-pip install -r requirements.txt   # one-click: runtime + dev (pytest)
+pip install -r requirements.txt   # one-click: runtime + dev + viewer
 pip install -e .                  # runtime only
 pip install -e '.[viewer]'        # + the optional viewer (fastapi/uvicorn/jinja2/markdown-it-py)
 ```
@@ -130,7 +130,7 @@ Two shapes mirror `triage analyze`: a **trials root** serves an overview page (`
 
 Each trial page shows the **native** evaluation blocks (outcome/f2p/p2p/partial, tokens & cost, phase timing, verifier ctrf summary + failed tests, exception, artifacts manifest) followed by that trial's `analysis.md`. The diagnosis section **degrades to a hint** when a directory has no `triage-kit/` products, so raw evaluation results can be passed straight in — the native side renders either way.
 
-Requires the `[viewer]` extra (`pip install -e '.[viewer]'`). The entry point is analyze (trials); a tasks directory is rejected with an explicit "check mode not yet supported" error (the check/tasks view is a later landing of the same feature).
+Requires the `[viewer]` extra (`pip install -e '.[viewer]'`). The entry point is analyze (trials); a tasks directory is rejected with an explicit "check mode not yet supported" error (the check/tasks view is not implemented yet).
 
 ### `triage clean <path>`
 
@@ -185,7 +185,7 @@ Both commands reuse cached products by default. A cache hit requires an identity
 
 Task/trial files are read as plain JSON in the Harbor-native layout (trial directories with `result.json`, task directories with `task.toml`), so results produced by standard Harbor jobs work out of the box.
 
-The judge never sees its own prior verdicts on the check path: the `triage-kit/` products directory is excluded from the check file tree, so a `--force` re-check is an independent re-judgment. (On the analyze path the claude backend delegates tool execution to the SDK's CLI, which currently has no such deny-list — a known gap tracked as P013 in the roadmap.)
+The judge never sees its own prior verdicts on the check path: the `triage-kit/` products directory is excluded from the check file tree, so a `--force` re-check is an independent re-judgment. (On the analyze path the claude backend delegates tool execution to the SDK's CLI, which currently has no such deny-list — a known limitation.)
 
 Judgment criteria live in data (TOML rubrics); output schemas are generated dynamically from them — extending evaluation dimensions requires zero code changes:
 
@@ -207,9 +207,8 @@ The five prompt/rubric files are frozen byte-for-byte against their upstream ori
 ## Roadmap
 
 Planned work is tracked in [ROADMAP.md](ROADMAP.md) — the single
-source of truth. Each entry has a one-page design doc under
-`docs/proposals/`; code starts only after the doc passes its
-pre-development gate.
+source of truth. Larger items get a one-page design doc under
+`docs/proposals/` before implementation.
 
 ## Development
 

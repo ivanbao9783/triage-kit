@@ -54,7 +54,7 @@ def write_sidecar(directory, name, *, model, rubric_path) -> None:
     )
 
 
-# ---------- Concurrency-test fakes (P003) ----------
+# ---------- Concurrency-test fakes ----------
 
 def make_backend_keyed(mapping: dict, *, delays: dict | None = None):
     """Order-independent fake for concurrent runs.

@@ -75,14 +75,13 @@ def _fail(message: str) -> None:
 
 @contextlib.contextmanager
 def _persist_run_log(target_dir: Path, verbose: bool):
-    """P011: persist this run's log to <target_dir>/triage-kit/run.log.
+    """Persist this run's log to <target_dir>/triage-kit/run.log.
 
-    Contract (Gate 1, 2026-10-10): overwritten per run (mode="w"),
-    always captures DEBUG — the file exists to explain the products it
-    sits next to (what the judge read, which turn failed). The console
-    keeps its default behavior: WARNING+ unless -v lowers it to DEBUG.
-    Handlers are removed on exit so repeated in-process invocations do
-    not stack handlers.
+    Overwritten per run (mode="w"), always captures DEBUG — the file
+    exists to explain the products it sits next to (what the judge read,
+    which turn failed). The console keeps its default behavior: WARNING+
+    unless -v lowers it to DEBUG. Handlers are removed on exit so
+    repeated in-process invocations do not stack handlers.
     """
     products = target_dir / _PRODUCTS_DIR_NAME
     products.mkdir(exist_ok=True)
@@ -185,7 +184,7 @@ def analyze(
             run = lambda: analyzer.analyze_job(path, failing_only=failing)
         else:
             _fail(f"not a trial or job directory: {path}")
-        # P011: persist the run log next to the products it explains.
+        # Persist the run log next to the products it explains.
         with _persist_run_log(path, verbose):
             run()
     except ValueError as e:
@@ -253,7 +252,7 @@ def check(
             lang=lang,
             jobs=jobs,
         )
-        # P014 D1: single command, two shapes — the argument itself is a
+        # Single command, two shapes — the argument itself is a
         # task directory (contains task.toml) → single check; otherwise a
         # one-level scan decides batch mode. No --recursive.
         if task_reader.is_task_dir(path):
@@ -266,7 +265,7 @@ def check(
                 f"under: {path}"
             )
             return
-        # P011: persist the run log next to the products it explains
+        # Persist the run log next to the products it explains
         # (batch mode: at the root, next to check-summary.json).
         with _persist_run_log(path, verbose):
             run()

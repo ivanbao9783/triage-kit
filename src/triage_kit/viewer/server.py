@@ -1,4 +1,4 @@
-"""Zero-build FastAPI + Jinja2 SSR app for the viewer (P006).
+"""Zero-build FastAPI + Jinja2 SSR app for the viewer.
 
 The server only *reads* products through ``scanner`` and renders HTML:
 no bundler, no npm, no write path. Templates ship inside the package

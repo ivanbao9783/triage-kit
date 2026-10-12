@@ -1,10 +1,10 @@
-"""Guard tests for the E2E mini dataset (P015).
+"""Guard tests for the E2E mini dataset.
 
 The dataset is the fixed input contract of the E2E runbook
 (tests/e2e/RUNBOOK.md): renames are breaking (the analyzer's
 trial_name contract) and accidental deletion silently hollows out
-every future Gate 2. These tests are cheap directory-shape checks,
-not content validation.
+every live verification pass. These tests are cheap directory-shape
+checks, not content validation.
 """
 
 from pathlib import Path

@@ -34,12 +34,12 @@ def detect_steps(path: Path) -> list[Path]:
 
 
 def is_task_dir(path: Path) -> bool:
-    """A task directory is any directory containing task.toml (P014 D1)."""
+    """A task directory is any directory containing task.toml."""
     return (Path(path) / "task.toml").is_file()
 
 
 def list_task_dirs(root: Path) -> list[Path]:
-    """One-level scan for task directories (P014 D1).
+    """One-level scan for task directories.
 
     Only direct subdirectories containing task.toml are discovered —
     grandchild tasks are out of scope (no --recursive) and non-task

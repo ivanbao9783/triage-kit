@@ -116,7 +116,7 @@ class TestAnalyzeTrial:
         assert saved["checks"]["reward_hacking"]["outcome"] == "pass"
 
     def test_products_live_in_triage_kit_subdirectory(self, trial, rubric):
-        """D1: 产物全部落 <trial>/triage-kit/ 子目录（去前缀），
+        """产物全部落 <trial>/triage-kit/ 子目录（去前缀），
         trial 根目录不残留任何 triage 产物。"""
         from triage_kit.core.analyzer import Analyzer
 
@@ -133,7 +133,7 @@ class TestAnalyzeTrial:
         assert not (trial / "triage-kit-analysis.md").exists()
 
     def test_job_products_live_in_triage_kit_subdirectory(self, tmp_path, rubric):
-        """D1: job 级产物同样进 triage-kit/ 子目录。"""
+        """job 级产物同样进 triage-kit/ 子目录。"""
         from triage_kit.core.analyzer import Analyzer
 
         make_trial(tmp_path / "t1__aaa", reward=0.0)
@@ -150,7 +150,7 @@ class TestAnalyzeTrial:
     def test_lang_zh_writes_native_md_per_trial_and_job(
         self, tmp_path, rubric
     ):
-        """P009 路线 B: --lang zh 时 analysis.md 即中文原生撰写版，
+        """--lang zh 时 analysis.md 即中文原生撰写版，
         analysis.zh.md 退役（不再产生）；JSON 契约产物恒英文。
         """
         from triage_kit.core.analyzer import Analyzer
@@ -195,7 +195,7 @@ class TestAnalyzeTrial:
         assert len(composes) == 3
 
     def test_lang_default_is_english_no_extra_calls(self, trial, rubric):
-        """Q3/P009: 默认英文——零 compose 调用，md 为机械渲染英文。"""
+        """默认英文——零 compose 调用，md 为机械渲染英文。"""
         from triage_kit.core.analyzer import Analyzer
 
         backend = make_backend(GOOD_RESPONSE)
@@ -501,7 +501,7 @@ class TestAnalyzeJob:
 
 
 class TestZhCompose:
-    """P009: --lang zh 二跳从「翻译」改为「中文原生撰写」。
+    """--lang zh 二跳从「翻译」改为「中文原生撰写」。
 
     输入源 = 结构化 payload（trial 级 analysis.json 内容 / job 级
     summary 文本），不再喂英文 markdown；prompt 为中文写作指令 +
@@ -589,7 +589,7 @@ class TestZhCompose:
 
 
 class TestParallelAnalysis:
-    """P003: `-j/--jobs` — 有界线程池包裹 analyze_trial，join 后聚合。
+    """`-j/--jobs` — 有界线程池包裹 analyze_trial，join 后聚合。
     产物顺序钉在目录序上（对 j 不变），单 trial 失败不毒化兄弟。"""
 
     def test_jobs_below_one_rejected(self, rubric):

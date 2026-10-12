@@ -229,7 +229,7 @@ class TestAnalyzeCommand:
 
 
 class TestJobsOption:
-    """P003: `-j/--jobs` — analyze 并发度（job 模式）。"""
+    """`-j/--jobs` — analyze 并发度（job 模式）。"""
 
     def test_jobs_zero_rejected(self, fake_backend, trial):
         from triage_kit.cli import app
@@ -362,7 +362,7 @@ class TestCheckCommand:
         assert result.exit_code != 0
 
     def test_lang_zh_composes_md(self, fake_backend, tmp_path):
-        """P014 D3: --lang zh 触发 compose 跳，md 落盘。"""
+        """--lang zh 触发 compose 跳，md 落盘。"""
         from triage_kit.cli import app
 
         task = tmp_path / "task"
@@ -415,7 +415,7 @@ class TestCheckCommand:
         assert result.exit_code != 0
 
     def test_batch_dir_checks_all_tasks(self, fake_backend, tmp_path):
-        """P014 D1: tasks 根目录 → 批量；汇总 + run.log 落根级。"""
+        """tasks 根目录 → 批量；汇总 + run.log 落根级。"""
         from triage_kit.cli import app
 
         tasks = tmp_path / "tasks"
@@ -602,8 +602,8 @@ class TestBackendSelection:
         assert captured["name"] == "claude"
 
     def test_base_url_option_removed(self, trial):
-        """--base-url retired with the general backend (P012): endpoint
-        override is via the ANTHROPIC_BASE_URL environment variable."""
+        """--base-url is retired; the endpoint override is via the
+        ANTHROPIC_BASE_URL environment variable."""
         from triage_kit.cli import app
 
         result = runner.invoke(
@@ -629,7 +629,7 @@ class TestBackendSelection:
 
 
 class TestRunLogPersistence:
-    """P011: 每次运行把执行日志落盘到 <path>/triage-kit/run.log。
+    """每次运行把执行日志落盘到 <path>/triage-kit/run.log。
 
     契约：单一落点（CLI 参数目录）；覆盖模式（非追加）；文件级别
     恒 DEBUG（控制台行为不变：默认 WARNING+，-v 才 DEBUG）；clean
@@ -737,7 +737,7 @@ class TestRunLogPersistence:
 
 
 class TestViewCommand:
-    """P006: `triage view` — 只读 SSR viewer。serve 被 monkeypatch 隔离
+    """`triage view` — 只读 SSR viewer。serve 被 monkeypatch 隔离
     uvicorn 与网络，只验证 CLI 侧的路径校验、模式路由与依赖提示。"""
 
     @staticmethod
