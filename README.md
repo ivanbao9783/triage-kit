@@ -4,7 +4,7 @@ Decoupled, model-agnostic **badcase triage & task quality check toolkit** for Ha
 
 - **`triage analyze`** — post-evaluation triage of trial results: filter badcases (`--failing`), attribute each one against a rubric (reward hacking / task specification)
 - **`triage check`** — pre-evaluation quality gate for task directories (11-criteria default rubric): single task or batch over a tasks root (`-j` concurrency, root-level summary)
-- **`triage view`** — local **read-only** web view of the analyze diagnosis products: a trials overview (job aggregate + Reward filter) and a single-trial page (native evaluation blocks + that trial's report)
+- **`triage view`** — local **read-only** web view of the analyze diagnosis products: a trials overview (job aggregate + Reward filter) and a single-trial page split into five tabs (overview / score / trace / tool analysis / diagnosis)
 - **`triage clean`** — restore evaluated directories by removing all `triage-kit/` product directories (dry-run by default)
 
 triage-kit is an **independently runnable** toolkit powered by the Claude Agent SDK — reaching both Anthropic's own models and Anthropic-compatible endpoints (e.g. DeepSeek via `ANTHROPIC_BASE_URL`). Its prompt/rubric assets originate from the [Harbor framework](https://github.com/harbor-framework/harbor) (Apache-2.0, vendored byte-for-byte). Design document: [docs/DESIGN.md](docs/DESIGN.md).
@@ -126,9 +126,9 @@ Local **read-only** web viewer for the analyze diagnosis products. Zero build: a
 | `--host <addr>` | Bind host (default: `127.0.0.1`) |
 | `-p, --port <n>` | Bind port (default: `8000`) |
 
-Two shapes mirror `triage analyze`: a **trials root** serves an overview page (`/`) — the job-level aggregate `analysis.md` plus a trials table (name, reward, diagnosis present) with a server-side **Reward filter** (`?reward=1|0`) — and each row links to a single-trial page (`/trial/<name>`); a **single trial** renders that trial page directly at `/`.
+Two shapes mirror `triage analyze`: a **trials root** serves an overview page (`/`) — summary KPI cards + the job-level aggregate `analysis.md` + a trials table with an independent server-side **Reward filter** row (ALL / Resolved / Unresolved, `?reward=1|0`, anchored at `#trials` so filtering never jumps to the top) — and each row links to a single-trial page (`/trial/<name>`); a **single trial** renders that trial page directly at `/`. The left nav always lists every trial, independent of the table filter.
 
-Each trial page shows the **native** evaluation blocks (outcome/f2p/p2p/partial, tokens & cost, phase timing, verifier ctrf summary + failed tests, exception, artifacts manifest) followed by that trial's `analysis.md`. The diagnosis section **degrades to a hint** when a directory has no `triage-kit/` products, so raw evaluation results can be passed straight in — the native side renders either way.
+Each trial page is split into five server-rendered tabs (state carried in `?tab=`): **overview** (outcome/tokens/cost KPIs, phase timing, artifacts), **score** (dynamic reward breakdown + verifier CTRF case list + exception), **trace** (per-step trajectory, with token bars deep-linking to a step), **tools** (aggregated tool-call stats + per-call detail), and **diagnosis** (that trial's `analysis.md`). The diagnosis tab **degrades to a hint** when a directory has no `triage-kit/` products, so raw evaluation results can be passed straight in — the native tabs render either way.
 
 Requires the `[viewer]` extra (`pip install -e '.[viewer]'`). The entry point is analyze (trials); a tasks directory is rejected with an explicit "check mode not yet supported" error (the check/tasks view is not implemented yet).
 
@@ -214,7 +214,7 @@ source of truth. Larger items get a one-page design doc under
 
 ```bash
 pip install -r requirements.txt
-pytest                    # 201 tests, no network access needed
+pytest                    # 248 tests, no network access needed
 ```
 
 The viewer tests use `fastapi.testclient` (part of the `dev` extra) and need the `viewer` extra installed.

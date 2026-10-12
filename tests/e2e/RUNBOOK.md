@@ -30,8 +30,8 @@ Default model below: `deepseek-flash` (substitute as needed). Run
 from the repo root.
 
 Products are intentionally kept after a pass — they are the review
-material for rubric/prompt quality and the input for the future
-diagnosis viewer (P006). Only when you need a fresh live pass (no
+material for rubric/prompt quality and the input for the diagnosis
+viewer (P006). Only when you need a fresh live pass (no
 cache hits) run `triage clean tests/e2e/data --yes` first, and note
 it wipes the previous pass's products.
 

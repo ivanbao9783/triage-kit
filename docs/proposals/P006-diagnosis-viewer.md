@@ -45,8 +45,11 @@ endpoint is designed but not shipped here.
 - No remote/hosted deployment — local read-only viewing.
 - No write path: the viewer never regenerates products (the upstream
   viewer has embedded summarize triggers; we keep judging in the CLI).
-- This landing excludes: the check/tasks mode, heatmap / criteria
-  matrix, structured checks tables, and the trajectory timeline.
+- This landing excludes: the check/tasks mode and the heatmap /
+  criteria matrix (a cross-trial × dimension aggregate view). The
+  structured checks tables (full CTRF case list) and the trajectory
+  timeline originally deferred here both **landed in the UI follow-up**
+  below.
 
 ## Current state & gap
 
@@ -80,8 +83,9 @@ endpoint is designed but not shipped here.
   supported" error rather than silently mixed.
 - **D5 — Rendering: markdown-first.** The overview renders the job
   aggregate `analysis.md`; a single-trial page renders that trial's
-  `analysis.md`. No structured checks tables yet — left to a UI
-  optimization pass. Markdown tables must be enabled
+  `analysis.md`. Structured checks tables (the full verifier CTRF
+  case list) landed in the UI follow-up below; markdown stays the
+  spine. Markdown tables must be enabled
   (`MarkdownIt("commonmark").enable(["table","strikethrough"])`).
 - **D6 — Degradation: native-first, diagnosis optional.** The input
   may be raw evaluation results (no `triage-kit/`); the overview and
@@ -127,7 +131,17 @@ follows `--lang`, so it renders as stored.
 - Proposed 2026-10-09. Gate 1 accepted 2026-10-12 (user-confirmed
   D1–D8; validated by a zero-build prototype against real products).
   Gate 2 landed 2026-10-12: TDD scanner/server/CLI suite added (39 new
-  tests, 201 total green), live E2E on the P015 mini set + the raw-data
-  degradation path, wheel verified to carry the templates; DESIGN/README
-  synced. Reference: the upstream evaluation framework's viewer module
+  tests, 201 total green at that landing), live E2E on the P015 mini set
+  + the raw-data degradation path, wheel verified to carry the templates;
+  DESIGN/README synced.
+- UI follow-up landed 2026-10-12 (`f9485d2`, `d0d5d44`): the
+  single-trial page split into five server-rendered tabs (`?tab=`) —
+  overview / score / trace / tools / diagnosis; new
+  `viewer/trajectory.py` parses ATIF (`agent/trajectory.json`) for the
+  trace and tool-analysis tabs (per-step detail, token bars deep-link
+  to and auto-open a step); structured verifier case table (full CTRF
+  pass/fail list); Reward filter moved to an independent,
+  anchor-preserving row (ALL / Resolved / Unresolved) with the left nav
+  always full; design-token UI pass. **248 total green.**
+- Reference: the upstream evaluation framework's viewer module
   (FastAPI server, task_scanner, bun-built frontend).
