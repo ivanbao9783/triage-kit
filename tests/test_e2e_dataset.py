@@ -24,14 +24,21 @@ TRIALS = [
 ]
 
 
+def _fixture_names(directory: Path) -> list[str]:
+    """Fixture directory names, ignoring triage-kit/ runtime products
+    (an E2E run in progress — or awaiting step-7 clean — legitimately
+    leaves product dirs next to the fixtures)."""
+    return sorted(
+        d.name for d in directory.iterdir() if d.name != "triage-kit"
+    )
+
+
 class TestE2eMiniDataset:
     def test_exact_task_set(self):
-        actual = sorted(d.name for d in (DATA / "tasks").iterdir())
-        assert actual == sorted(TASKS)
+        assert _fixture_names(DATA / "tasks") == sorted(TASKS)
 
     def test_exact_trial_set(self):
-        actual = sorted(d.name for d in (DATA / "job").iterdir())
-        assert actual == sorted(TRIALS)
+        assert _fixture_names(DATA / "trial_results") == sorted(TRIALS)
 
     def test_tasks_are_valid_task_dirs(self):
         from triage_kit.core.task_reader import validate_task_dir
@@ -44,7 +51,7 @@ class TestE2eMiniDataset:
         (reward / exception attribution input) and agent/trajectory.json
         (judge's evidence source)."""
         for name in TRIALS:
-            trial = DATA / "job" / name
+            trial = DATA / "trial_results" / name
             assert (trial / "result.json").is_file(), name
             assert (trial / "agent" / "trajectory.json").is_file(), name
 
@@ -52,7 +59,9 @@ class TestE2eMiniDataset:
         """The mini-swe-agent.* raw duplicates are the slimming cut —
         their reappearance means someone copied verbatim (~30 MB)."""
         for name in TRIALS:
-            mini = list((DATA / "job" / name).rglob("mini-swe-agent*"))
+            mini = list(
+                (DATA / "trial_results" / name).rglob("mini-swe-agent*")
+            )
             assert mini == [], f"{name}: {mini}"
 
     def test_reward_coverage_pass_fail_exception(self):
@@ -62,7 +71,7 @@ class TestE2eMiniDataset:
 
         def read(name, key):
             result = json.loads(
-                (DATA / "job" / name / "result.json").read_text(
+                (DATA / "trial_results" / name / "result.json").read_text(
                     encoding="utf-8"
                 )
             )

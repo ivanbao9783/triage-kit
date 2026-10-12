@@ -1,10 +1,12 @@
 # P014 — check batch mode & human-readable products
 
-Status: **building** · Type: feature · Priority: medium
-(Gate 1 passed 2026-10-12; D1–D4 below are user-confirmed.
-Implementation landed same day — full regression 156 green (137
-baseline + 19 new); live E2E on `deep-swe/tasks/` folds into the next
-unified E2E run, closing Gate 2.)
+Status: **landed** (2026-10-12) · Type: feature · Priority: medium
+(Gate 2 passed 2026-10-12: full P015 mini-dataset matrix, live
+deepseek-flash. Batch check (-j 2, real verdicts incl. 1 fail + 2
+not_applicable), cache rerun, single-task --force, per-task md
+skeletons, summary + root run.log all verified. One fix landed from
+the run: per_criterion now counts cached verdicts too — a resumed
+CI rerun must not lose its statistics. Regression 163 green.)
 
 ## Background & motivation
 

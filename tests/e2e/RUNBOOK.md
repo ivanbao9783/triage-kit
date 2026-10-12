@@ -7,7 +7,7 @@ Anyone, anytime, same inputs → comparable results. One full pass
 Dataset (see [P015](../../docs/proposals/P015-e2e-mini-dataset.md) for
 selection rationale):
 
-| # | Task (`data/tasks/`) | Trial (`data/job/`) | Reward | Role |
+| # | Task (`data/tasks/`) | Trial (`data/trial_results/`) | Reward | Role |
 |---|----------------------|---------------------|--------|------|
 | A | `abs-module-cache-flags` | `abs-module-cache-flags__CuCWVBi` | 1 | pass attribution |
 | B | `adaptix-name-mapping-aliases` | `adaptix-name-mapping-aliases__ptkak5r` | 0 | normal badcase |
@@ -71,35 +71,46 @@ Expected: exit 0; summary shows `cached=3, checked=0, failed=0`;
 ### 4. Job analyze — aggregation, concurrency
 
 ```bash
-triage analyze tests/e2e/data/job -m deepseek-flash -j 2
+triage analyze tests/e2e/data/trial_results -m deepseek-flash -j 2
 ```
 
 Expected:
 - exit 0; 3 trial-level `triage-kit/analysis.{json,md,meta.json}`
-- job-level `data/job/triage-kit/analysis.json` (`summary` + 3 trials)
-  and `analysis.md` (`# Job Analysis`)
+- job-level `data/trial_results/triage-kit/analysis.json` (`summary` +
+  3 trials) and `analysis.md` (`# Job Analysis`)
 - job `run.log` with `[trial_name]` prefixes, 3 × `analysis finished`
 - trial A (reward=1) judged; B and C attributed as badcases
 
 ### 5. Failing-only + Chinese reports — filter, compose
 
+Cache identity is rubric + model (P009 decision (i)): **lang is not
+part of it**. A plain rerun after step 4 therefore cache-hits every
+failing trial and skips the zh compose entirely (only the uncached
+job-level zh summary regenerates). To live-verify trial-level zh
+composition, force the failing subset:
+
 ```bash
-triage analyze tests/e2e/data/job --failing -m deepseek-flash -j 2 --lang zh
+triage analyze tests/e2e/data/trial_results --failing --force -m deepseek-flash -j 2 --lang zh
 ```
 
-Expected: exit 0; only trials B + C re-analyzed (`--force`-free run
-reuses A's cache hit from step 4); their `analysis.md` is natively
-composed Chinese (not translationese; identifiers stay English);
-JSON stays English; `analysis.zh.md` never appears.
+Expected: exit 0; trials B + C re-analyzed; their `analysis.md` is
+natively composed Chinese (not translationese; identifiers stay
+English); JSON stays English; `analysis.zh.md` never appears;
+job-level `analysis.md` regenerates as `# 作业级分析` (failing
+subset: 0 / 2 passed). Trial A is excluded by `--failing` and keeps
+its step-4 products.
 
 ### 6. Single trial + task-dir override — local-task path
 
+Same cache semantics: add `--force` for live verification.
+
 ```bash
-triage analyze tests/e2e/data/job/abs-module-cache-flags__CuCWVBi -m deepseek-flash --task-dir tests/e2e/data/tasks/abs-module-cache-flags
+triage analyze tests/e2e/data/trial_results/abs-module-cache-flags__CuCWVBi -m deepseek-flash --task-dir tests/e2e/data/tasks/abs-module-cache-flags --force
 ```
 
 Expected: exit 0; trial-level products only (no job aggregation);
-prompt carries the real task files (not the degraded section);
+the analysis references real task requirement details (evidence the
+override fed the actual task files, not the degraded section);
 `run.log` at the trial level.
 
 ### 7. Restore — dry-run then delete

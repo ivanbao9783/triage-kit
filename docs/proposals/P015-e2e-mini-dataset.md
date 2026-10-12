@@ -1,10 +1,12 @@
 # P015 — E2E mini dataset (fixed 3-task / 3-trial fixtures)
 
-Status: **building** · Type: feature · Priority: medium
-(Gate 1 passed 2026-10-12; D1–D3 user-confirmed. Dataset built +
-runbook + 6 guard tests landed same day — full regression 162 green;
-first live matrix run folds into the next unified E2E, closing
-Gate 2 and flipping P014 with it.)
+Status: **landed** (2026-10-12) · Type: feature · Priority: medium
+(Gate 1 + Gate 2 both passed 2026-10-12. Dataset built (renamed
+`job/` → `trial_results/` to match Harbor's concept), full live
+matrix executed on deepseek-flash — all steps green, one real bug
+found and fixed (P014 per_criterion cache gap), runbook steps 5/6
+corrected to carry `--force` under the decision-(i) cache semantics.
+First full pass: ~14 LLM calls, ~25 min wall. Regression 163 green.)
 
 ## Background & motivation
 
@@ -71,7 +73,8 @@ tests/e2e/
 ├── RUNBOOK.md            fixed command matrix + expected outcomes
 └── data/
     ├── tasks/            3 task dirs (verbatim from deep-swe/tasks)
-    └── job/              3 trial dirs (slimmed copies from details/)
+    └── trial_results/    3 trial dirs (slimmed copies from details/;
+                           name matches the Harbor trial-results concept)
 ```
 
 Slimming rule: drop `mini-swe-agent.trajectory.json` /

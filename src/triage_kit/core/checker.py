@@ -187,7 +187,7 @@ class Checker:
 
         with ThreadPoolExecutor(max_workers=self.jobs) as pool:
             futures = [pool.submit(self._check_one, d) for d in task_dirs]
-            checked_results: list[dict] = []
+            all_results: list[dict] = []
             cached_count = 0
             failed_tasks: list[str] = []
             # Consume in listing order — result() blocks on that specific
@@ -204,22 +204,25 @@ class Checker:
                     logger.debug(
                         "[%s] failure traceback", task_dir.name, exc_info=exc
                     )
-                elif cached:
-                    cached_count += 1
                 else:
-                    checked_results.append(result)
+                    all_results.append(result)
+                    if cached:
+                        cached_count += 1
 
+        # per_criterion counts every verdict (cached included): a
+        # resumed CI rerun must not lose its statistics — cached
+        # products are schema-revalidated on read-back.
         per_criterion = {
             c.name: {"pass": 0, "fail": 0, "not_applicable": 0}
             for c in self.rubric.criteria
         }
-        for result in checked_results:
+        for result in all_results:
             for name, check in result["checks"].items():
                 per_criterion[name][check["outcome"]] += 1
 
         summary = {
             "total": len(task_dirs),
-            "checked": len(checked_results),
+            "checked": len(all_results) - cached_count,
             "cached": cached_count,
             "failed": len(failed_tasks),
             "per_criterion": per_criterion,

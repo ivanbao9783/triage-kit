@@ -379,6 +379,11 @@ class TestCheckBatch:
         assert len(backend.agent_prompts) == 1     # only t2 hit the LLM
         assert not (tmp_path / "t1" / TK / MD).exists()
         assert (tmp_path / "t2" / TK / MD).exists()
+        # cached verdicts count toward per_criterion too: the summary
+        # must reflect the task set's verdicts on every (re)run —
+        # a resumed CI rerun cannot lose its statistics
+        first = rubric.criteria[0].name
+        assert summary["per_criterion"][first]["pass"] == 2
 
     def test_single_failure_folded_not_raised(
         self, tmp_path, rubric, good_response, caplog
