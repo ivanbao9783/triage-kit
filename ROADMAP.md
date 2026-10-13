@@ -27,3 +27,4 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P015 | E2E mini dataset (fixed 3-task / 3-trial fixtures) | feature | medium | landed | [P015-e2e-mini-dataset.md](docs/proposals/P015-e2e-mini-dataset.md) |
 | P016 | Criteria matrix / heatmap (cross-trial × dimension) | feature | low | proposed | [P016-criteria-matrix.md](docs/proposals/P016-criteria-matrix.md) |
 | P018 | DeepSeek Harness SDK backend | feature | medium | proposed | [P018-deepseek-harness-sdk-backend.md](docs/proposals/P018-deepseek-harness-sdk-backend.md) |
+| P019 | Dependency lockfile (`uv.lock`) for reproducible installs | process | low | proposed | [P019-dependency-lockfile.md](docs/proposals/P019-dependency-lockfile.md) |
