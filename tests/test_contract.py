@@ -1,7 +1,5 @@
 """Tests for triage_kit.core.contract — the backend contract."""
 
-from pathlib import Path
-
 from triage_kit.core.contract import AgentMeta
 
 
@@ -16,16 +14,25 @@ class TestAgentMeta:
 
     def test_backend_conformance_is_structural(self):
         """Any class with the right methods satisfies the Protocol."""
-        from typing import Protocol, runtime_checkable
-
         from triage_kit.core.contract import AgentBackend
 
         class Fake:
             def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                            output_schema=None, max_turns=15):
+                            output_schema=None):
                 return {}, AgentMeta(n_turns=1, model=model)
 
             def query(self, prompt, *, model):
                 return "text", AgentMeta(n_turns=0, model=model)
 
         assert isinstance(Fake(), AgentBackend)
+
+    def test_query_agent_has_no_max_turns_parameter(self):
+        """max_turns was a dead leftover: declared in the contract but
+        never passed by callers and never honored by any harness.
+        """
+        import inspect
+
+        from triage_kit.core.contract import AgentBackend
+
+        params = inspect.signature(AgentBackend.query_agent).parameters
+        assert "max_turns" not in params

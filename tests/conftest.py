@@ -76,7 +76,7 @@ def make_backend_keyed(mapping: dict, *, delays: dict | None = None):
             self.plain_prompts: list[str] = []
 
         def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                        output_schema=None, max_turns=15):
+                        output_schema=None):
             name = Path(cwd).name
             time.sleep(delays.get(name, 0))
             self.agent_prompts.append(prompt)
@@ -107,7 +107,7 @@ def make_barrier_backend(parties: int, response: dict):
             self.barrier = threading.Barrier(parties)
 
         def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                        output_schema=None, max_turns=15):
+                        output_schema=None):
             self.barrier.wait(timeout=5)
             return dict(response, trial_name=Path(cwd).name), AgentMeta(
                 n_turns=2, model=model)

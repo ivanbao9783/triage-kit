@@ -27,5 +27,4 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P014 | check batch mode & human-readable products | feature | medium | landed | [P014-check-batch-and-readable.md](docs/proposals/P014-check-batch-and-readable.md) |
 | P015 | E2E mini dataset (fixed 3-task / 3-trial fixtures) | feature | medium | landed | [P015-e2e-mini-dataset.md](docs/proposals/P015-e2e-mini-dataset.md) |
 | P016 | Criteria matrix / heatmap (cross-trial × dimension) | feature | low | proposed | [P016-criteria-matrix.md](docs/proposals/P016-criteria-matrix.md) |
-| P017 | Codex SDK backend | feature | medium | accepted | [P017-codex-sdk-backend.md](docs/proposals/P017-codex-sdk-backend.md) |
 | P018 | DeepSeek Harness SDK backend | feature | medium | proposed | [P018-deepseek-harness-sdk-backend.md](docs/proposals/P018-deepseek-harness-sdk-backend.md) |

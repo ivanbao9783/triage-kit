@@ -109,7 +109,6 @@ class ClaudeHarness:
         model: str | None = None,
         add_dirs=None,
         output_schema=None,
-        max_turns: int = 15,
     ):
         self._guard_real_path()
         # meta records what actually ran (post-normalization)

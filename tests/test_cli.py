@@ -26,7 +26,7 @@ def make_fake_backend():
             self.calls: list[dict] = []
 
         def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                        output_schema=None, max_turns=15):
+                        output_schema=None):
             self.agent_prompts.append(prompt)
             self.calls.append({"kind": "agent", "cwd": str(cwd),
                                "model": model,
@@ -96,8 +96,6 @@ class TestAnalyzeCommand:
         self, fake_backend, trial
     ):
         """缓存身份不符 → 报错退出；--force → 重跑覆盖。"""
-        import hashlib
-
         from triage_kit.cli import app
 
         # 首跑：glm-4.7
@@ -617,7 +615,7 @@ class TestBackendSelection:
         import triage_kit.cli as cli
 
         with pytest.raises(ValueError):
-            cli.build_backend("general", "m")
+            cli.build_backend("nope", "m")
 
     def test_backend_factory_claude_shape(self, monkeypatch):
         """The real factory maps the claude name to a harness with model

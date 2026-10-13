@@ -27,7 +27,7 @@ def make_backend(response: dict, *, plain: str = "unused"):
             self.plain_prompts: list[str] = []
 
         def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                        output_schema=None, max_turns=15):
+                        output_schema=None):
             self.agent_prompts.append(prompt)
             self.last_cwd = cwd
             return response, AgentMeta(n_turns=2, model=model)
@@ -478,7 +478,7 @@ class TestCheckBatch:
                 self.barrier = threading.Barrier(2)
 
             def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                            output_schema=None, max_turns=15):
+                            output_schema=None):
                 self.barrier.wait(timeout=5)
                 return good_response, AgentMeta(n_turns=2, model=model)
 

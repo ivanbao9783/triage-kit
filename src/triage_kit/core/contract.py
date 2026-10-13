@@ -34,7 +34,6 @@ class AgentBackend(Protocol):
         model: str,
         add_dirs: list[Path] | None = None,
         output_schema: type[BaseModel] | None = None,
-        max_turns: int = 15,
     ) -> tuple[dict, AgentMeta]: ...
 
     def query(self, prompt: str, *, model: str) -> tuple[str, AgentMeta]: ...

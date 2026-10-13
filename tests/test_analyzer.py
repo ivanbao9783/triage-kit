@@ -22,7 +22,7 @@ def make_backend(response: dict):
             self.plain_prompts: list[str] = []
 
         def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                        output_schema=None, max_turns=15):
+                        output_schema=None):
             self.agent_prompts.append(prompt)
             return response, AgentMeta(n_turns=2, model=model)
 
@@ -44,7 +44,7 @@ def make_backend_seq(responses: list):
             self.plain_prompts: list[str] = []
 
         def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                        output_schema=None, max_turns=15):
+                        output_schema=None):
             self.agent_prompts.append(prompt)
             return self.responses.pop(0), AgentMeta(n_turns=2, model=model)
 
@@ -350,7 +350,7 @@ class TestAnalyzeJob:
 
         class EmptySummaryBackend:
             def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                            output_schema=None, max_turns=15):
+                            output_schema=None):
                 return dict(GOOD_RESPONSE, trial_name="t1__aaa"), AgentMeta(
                     n_turns=1, model=model)
 
@@ -576,7 +576,7 @@ class TestZhCompose:
 
         class EmptyZhBackend:
             def query_agent(self, prompt, *, cwd, model, add_dirs=None,
-                            output_schema=None, max_turns=15):
+                            output_schema=None):
                 return GOOD_RESPONSE, None
 
             def query(self, prompt, *, model):

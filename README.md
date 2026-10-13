@@ -173,7 +173,7 @@ export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 triage analyze path/to/job --failing -m deepseek-flash -j 8
 ```
 
-More backends (codex SDK, DeepSeek harness SDK) are planned; they will join `--backend` (see [Roadmap](#roadmap)).
+A DeepSeek Harness SDK backend (P018) is planned; it will join `--backend` (see [Roadmap](#roadmap)).
 
 **trae** — the hosting agent itself is the tool loop; a SKILL.md asset pack is on the roadmap.
 

@@ -9,7 +9,7 @@
 
 本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
-**项目现状**：CLI 四命令（analyze / check / view / clean）可用，248 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过——含 113-trial 真实 job 的 badcase 回收，以及固定 mini 集（P015）上的完整端到端矩阵。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。check 侧批量模式 + 人读产物（P014）已落地并 live 验证；E2E 固定数据集与 runbook（P015）已落地。只读结果 viewer（P006）已收尾：本地零构建 SSR（FastAPI + Jinja2），读 `triage-kit/` 布局渲染 analyze 产物——全景页带汇总 KPI 与独立 Reward 筛选行，单 trial 页拆为五页签（总览 / Trial 得分 / 执行轨迹 / 工具分析 / 诊断），轨迹与工具分析由新增 `viewer/trajectory.py` 解析（check/tasks 入口为同一特性的后续 landing）。
+**项目现状**：CLI 四命令（analyze / check / view / clean）可用，249 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过——含 113-trial 真实 job 的 badcase 回收，以及固定 mini 集（P015）上的完整端到端矩阵。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。check 侧批量模式 + 人读产物（P014）已落地并 live 验证；E2E 固定数据集与 runbook（P015）已落地。只读结果 viewer（P006）已收尾：本地零构建 SSR（FastAPI + Jinja2），读 `triage-kit/` 布局渲染 analyze 产物——全景页带汇总 KPI 与独立 Reward 筛选行，单 trial 页拆为五页签（总览 / Trial 得分 / 执行轨迹 / 工具分析 / 诊断），轨迹与工具分析由新增 `viewer/trajectory.py` 解析（check/tasks 入口为同一特性的后续 landing）。
 
 ---
 
@@ -22,7 +22,7 @@
 
 **血缘查证结论（2026-10-08，经 Harbor 上游核实）**：`analyze` 与 `check` 均为从 Harbor **vendored**（原样搬运）的能力（对应 Harbor 原生 `harbor task debug` 与 `harbor task check`），prompt/rubric 资产是 Harbor 生态的公共资产。因此 triage-kit 的解耦本质是**恢复这些资产的 Harbor-native 本来形态**（回归上游原始定位），而非移植改造。
 
-**目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（当前 Claude Agent SDK 单后端，通达 Anthropic 官方与 Anthropic 兼容端点如 DeepSeek；codex SDK / DeepSeek harness SDK 为规划中的后端），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 查看 → 复原"完整链条。**项目核心价值在诊断 rubric 与 prompt 资产**——harness 管道交给专业 SDK 维护（P012 决策）。
+**目标**：将归因（analyze）与任务质检（check）能力解耦为独立可本地运行的工具包，agent 粒度后端可插拔（当前 Claude Agent SDK 单后端，通达 Anthropic 官方与 Anthropic 兼容端点如 DeepSeek；DeepSeek harness SDK 为规划中的后端（P018）），原生兼容 Harbor 任务与评测结果，产物格式保持稳定（自建 viewer 按此读取），覆盖"任务质量 → 评测 → 归因 → 查看 → 复原"完整链条。**项目核心价值在诊断 rubric 与 prompt 资产**——harness 管道交给专业 SDK 维护（P012 决策）。
 
 **核心设计哲学继承自上游原版**：把"判定标准"从 prompt 里抽出来变成数据（rubric），让输出 schema 随 rubric 动态生成，实现无改码的评测维度扩展。
 
@@ -33,7 +33,7 @@
 | 决策点 | 结论 | 状态 |
 |---|---|---|
 | 运行形态 | 独立 CLI + TRAE skill 双形态，共享资产单源维护 | CLI 已落地；skill 为 P001 |
-| 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；**claude harness 单后端**（Claude Agent SDK，原上游 backend.py 移植；工具循环/上下文/结构化输出全由 SDK 承担）；trae harness 规划为 skill 形态，**不作为 CLI 选项**；codex / DeepSeek harness SDK 为规划后端（P012） | 已落地 |
+| 后端架构 | agent 粒度契约 `query_agent -> (result, meta)`；**claude harness 单后端**（Claude Agent SDK，原上游 backend.py 移植；工具循环/上下文/结构化输出全由 SDK 承担）；trae harness 规划为 skill 形态，**不作为 CLI 选项**；DeepSeek harness SDK 为规划后端（P018） | 已落地 |
 | Harbor 兼容 | 朴素 JSON 读取替代 TrialResult，原生支持（真实样本验证过字段布局，含 f2p/p2p/partial 细分透传） | 已落地 |
 | check 融合 | check 与 analyze 共享契约/schema 管线/两个 harness，引擎零新增——仅 `task_reader` + `checker` 编排 + `triage check` 子命令 | 已落地 |
 | check 批量与人读产物 | 单命令双形态（参数含 task.toml → 单任务；否则一层扫描子目录，≥1 task → 批量，0 → 报错）；批量写根级 `check-summary.json`（确定性计数零 LLM）+ 根级 run.log；`-j` 并发复用 P003 池模式（失败折叠、目录序、`[task_name]` 前缀）；每 task 产 `check-result.md`（`--lang` 语义与 analyze 一致：en 机械渲染 / zh 原生撰写，JSON 恒英文） | 已落地（P014，live E2E 并入下次统一 E2E） |
@@ -65,8 +65,7 @@ Agent 契约（唯一的接口层）
         │
         ├── trae harness ──── 规划形态：循环由 TRAE 宿主提供，SKILL.md 是资产包（P001）
         │
-        ├── codex harness ─── 规划（用户已排期意向，未立项）
-        └── deepseek harness ── 规划（DeepSeek 原生 SDK，未立项）
+        └── deepseek harness ── 规划（DeepSeek Harness SDK，P018 已立项）
 ```
 
 **关键分界线**：
@@ -79,7 +78,7 @@ Agent 契约（唯一的接口层）
 
 ```python
 class AgentMeta(BaseModel):
-    n_turns: int                 # 工具循环轮数（max_turns 诊断依据）
+    n_turns: int                 # 工具循环轮数
     n_input_tokens: int | None   # None = 该 harness 不提供
     n_output_tokens: int | None
     cost_usd: float | None
@@ -129,7 +128,7 @@ triage-kit/
 │   │
 │   └── cli.py                       入口：triage analyze / check / view / clean
 │
-├── tests/                           ← pytest，248 项；conftest.py 集中共享工厂/常量/FakeBackend
+├── tests/                           ← pytest，249 项；conftest.py 集中共享工厂/常量/FakeBackend
 │   └── e2e/                         固定 mini 集（P015）：RUNBOOK.md 命令矩阵 + data/（3 task + 3 trial 瘦身样本）
 ├── docs/
 │   ├── DESIGN.md                    本文档
@@ -346,7 +345,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十、工程质量机制
 
-- **TDD**：全项目红-绿流程，测试先行（248 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复。viewer 数据层（`scanner`/`trajectory`）零 web 依赖可单测，路由层用 `fastapi.testclient`（httpx）端到端断言
+- **TDD**：全项目红-绿流程，测试先行（249 项，pytest）；共享工厂/常量/FakeBackend 集中于 `tests/conftest.py`，杜绝测试间重复。viewer 数据层（`scanner`/`trajectory`）零 web 依赖可单测，路由层用 `fastapi.testclient`（httpx）端到端断言
 - **冻结资产守卫**：五份 prompt/rubric 资产 sha256 快照测试，任何字节级改动即刻报警（资产溯源与上游 diff 可同步性的根基）
 - **纯测试性**：`core/` 零 LLM 依赖，analyzer/checker 编排全部由 FakeBackend 驱动测试，不碰真实端点；真实端点验证走实测 E2E（DeepSeek anthropic 兼容端点，含 113-trial 真实 job 复跑）
 - **上下文与预算由 SDK 承担**：工具循环、轮次预算、上下文压缩均由 Claude Code CLI 自管（P012 的核心收益——自研 harness 的 forcing-400 / 工具异常两类缺陷随 general 退役消失，相关 dropped 条目文档已删除）
