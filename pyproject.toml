@@ -9,7 +9,7 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "typer>=0.12",
-    "claude-agent-sdk>=0.1",
+    "claude-agent-sdk==0.2.165",
 ]
 
 [project.optional-dependencies]

@@ -48,7 +48,7 @@ class ClaudeHarness:
 
     def _load_sdk(self):
         if self._sdk is None:
-            import claude_agent_sdk  # lazy: optional dependency
+            import claude_agent_sdk  # lazy: deferred import
 
             self._sdk = claude_agent_sdk
         return self._sdk

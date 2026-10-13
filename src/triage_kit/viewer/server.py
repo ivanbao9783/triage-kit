@@ -8,12 +8,11 @@ no bundler, no npm, no write path. Templates ship inside the package
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import Undefined
 from markdown_it import MarkdownIt
-from starlette.requests import Request
 
 from triage_kit.viewer import scanner, trajectory
 
