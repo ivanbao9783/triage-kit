@@ -7,7 +7,7 @@
 
 ## 一、文档定位与项目现状
 
-本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](../ROADMAP.md) 跟踪（每个特性一份 `docs/proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
+本文档是**现状快照**：只描述已落地的架构与机制，不含实施计划——未来工作统一由 [ROADMAP.md](ROADMAP.md) 跟踪（每个特性一份 `proposals/` 设计文档，见 P000 流程）。文中所有命令、文件、函数名均对照代码核验过。
 
 **项目现状**：CLI 四命令（analyze / check / view / clean）可用，249 项测试全绿，真实 LLM 端点（DeepSeek Anthropic 兼容端点）E2E 验证通过——含 113-trial 真实 job 的 badcase 回收，以及固定 mini 集（P015）上的完整端到端矩阵。后端收敛为 **Claude Agent SDK 单后端**（P012）：自研 general harness 已整体退役。check 侧批量模式 + 人读产物（P014）已落地并 live 验证；E2E 固定数据集与 runbook（P015）已落地。只读结果 viewer（P006）已收尾：本地零构建 SSR（FastAPI + Jinja2），读 `triage-kit/` 布局渲染 analyze 产物——全景页带汇总 KPI 与独立 Reward 筛选行，单 trial 页拆为五页签（总览 / Trial 得分 / 执行轨迹 / 工具分析 / 诊断），轨迹与工具分析由新增 `viewer/trajectory.py` 解析（check/tasks 入口为同一特性的后续 landing）。
 
@@ -132,8 +132,8 @@ triage-kit/
 │   └── e2e/                         固定 mini 集（P015）：RUNBOOK.md 命令矩阵 + data/（3 task + 3 trial 瘦身样本）
 ├── docs/
 │   ├── DESIGN.md                    本文档
+│   ├── ROADMAP.md                   跟踪索引（单一事实源）
 │   └── proposals/                   特性设计文档（P000 流程）
-├── ROADMAP.md                       跟踪索引（单一事实源）
 ├── requirements.txt                 一键安装入口（-e .[dev,viewer]；依赖事实源在 pyproject）
 ├── NOTICE                           Harbor Apache 2.0 血缘致谢
 └── pyproject.toml                   依赖: pydantic + pyyaml + typer + claude-agent-sdk（硬依赖）；

@@ -206,7 +206,7 @@ The five prompt/rubric files are frozen byte-for-byte against their upstream ori
 
 ## Roadmap
 
-Planned work is tracked in [ROADMAP.md](ROADMAP.md) — the single
+Planned work is tracked in [ROADMAP.md](docs/ROADMAP.md) — the single
 source of truth. Larger items get a one-page design doc under
 `docs/proposals/` before implementation.
 
