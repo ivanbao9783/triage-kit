@@ -41,7 +41,7 @@
 | 产物布局 | 全部落 `<dir>/triage-kit/` 子目录（analyze 与 check 同规则）：被评测目录零污染，`triage clean` 一条命令复原；不绑定任何上游 viewer 的落盘契约（用户决策 2026-10-09：当前无 viewer，未来自建，可自由采用新布局） | 已落地 |
 | 结果 viewer | 本地**只读**零构建 SSR（FastAPI + Jinja2 服务端渲染，无 bun/npm/vite）；`triage view <dir>` 双形态（trials 总目录 → 全景页 + 单 trial 页；单 trial → 直接渲染该页）；入口为 analyze/trials（check/tasks 入口为后续 landing，遇 tasks 目录显式报错）；原生侧信息恒渲染、诊断侧在无 `triage-kit/` 产物时降级为空；全景 Trials 列表带 Reward 服务端筛选行（ALL/Resolved/Unresolved，零 JS、左侧导航恒全量）；单 trial 页五页签（总览/得分/轨迹/工具/诊断，`?tab=` 承载状态），执行轨迹与工具分析由 `viewer/trajectory.py` 按需解析 ATIF、结构化 verifier 用例表（CTRF 全量 pass/fail）服务端渲染；依赖落可选 extra `[viewer]`（P006） | 已落地 |
 | 结构化输出 | claude harness 经 SDK 的 `output_format: json_schema` 机制（schema 由 rubric 动态编译注入）——SDK 原生强约束，无格式漂移风险 | 已落地 |
-| 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具缺口立项待办（P013）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；P013 待办 |
+| 安全与预算 | judge 禁读：check 侧 file_tree 排除 `triage-kit/`；analyze 侧 claude 路径的 CLI 工具不经本地沙箱（已知取舍）。上下文管理与轮次预算由 SDK CLI 承担 | check 侧已落地；analyze 侧为已知取舍 |
 | 缓存身份 | sidecar（`.meta.json`）记录 rubric 内容 sha256 + model；身份匹配复用、不匹配报错提示 `--force`、无 sidecar 的 legacy 产物视为 miss | 已落地 |
 | 多语言 | `--lang zh`：`analysis.md` / `check-result.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P009 路线 B；check 侧复用共享规则块，P014）；JSON 产物恒英文；`analysis.zh.md` 退役 | 已落地 |
 | 运行日志 | 每次 CLI 运行把执行日志落盘 `<CLI 参数目录>/triage-kit/run.log`（覆盖式、文件恒 DEBUG、控制台行为不变，P011）；与产物同生共死，`clean` 一并复原 | 已落地 |
@@ -235,7 +235,7 @@ triage view <job_dir> --port 8137              # 自定义绑定端口（--host/
 
 **judge 禁读机制（防自引用锚定，2026-10-09 实证引入）**：`--force` 重跑时 judge 若能读到上一轮判定，独立性失效。现状：
 1. check 的 file_tree 渲染排除 `triage-kit/`（`render_file_tree(exclude=...)`）——check 侧已封堵
-2. **analyze 侧已知缺口（P013 立项待办）**：claude 后端将工具执行委托给 Agent SDK（`bypassPermissions`），CLI 的 Read/Glob/Grep 不经过本地沙箱，`triage-kit/` 旧产物对 judge 可见——候选方案是 CLI permissions deny 规则，Gate 1 时定稿
+2. **analyze 侧已知缺口**：claude 后端将工具执行委托给 Agent SDK（`bypassPermissions`），CLI 的 Read/Glob/Grep 不经过本地沙箱，`triage-kit/` 旧产物对 judge 可见（已评估的已知取舍，暂不修复）
 
 `analysis.json` 内容示例：
 
@@ -355,7 +355,7 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 ## 十一、边界与已知取舍
 
 - **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项（P004）
-- **analyze 侧 judge 禁读缺口**：judge 禁读机制（第七节）在 claude 路径上失效——CLI 工具不经本地沙箱，`triage-kit/` 旧产物对 judge 可见（P013 立项待办）
+- **analyze 侧 judge 禁读缺口**：judge 禁读机制（第七节）在 claude 路径上失效——CLI 工具不经本地沙箱，`triage-kit/` 旧产物对 judge 可见（已评估的已知取舍，暂不修复）
 - **并发无限流调度**：`-j/--jobs` 为固定线程数，无限流自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）；且 worker 为 CLI 子进程，`-j` 过高会吃满机器资源
 - **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
 - **非 Anthropic 官方模型的 meta 缺失**：兼容端点（如 DeepSeek）不回填 token usage，`AgentMeta` 的 token 计数为 None、`analysis.meta.json` 无 token 统计（不影响判定与缓存身份，cost 由 CLI 回填）

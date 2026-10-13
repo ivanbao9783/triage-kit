@@ -50,7 +50,7 @@ Claude Code compatibility, so coverage is wider than "Anthropic only".
 - No codex/deepseek-harness backend implementation here (separate
   future entries; `--backend` keeps the extension seam).
 - No judge sandbox work in this entry (the CLI Read/Glob/Grep do not
-  pass through our deny-list — filed as P013).
+  pass through our deny-list — an accepted known gap).
 - No `--base-url` re-introduction; endpoint override stays via
   `ANTHROPIC_BASE_URL` (verified working against DeepSeek).
 - No changes to rubric/prompt assets, product schemas, or caching
@@ -90,9 +90,9 @@ User-confirmed decisions (2026-10-10):
 6. ROADMAP: the two general-harness defect entries (forced tool_choice
    400s; tool exception isolation) → dropped (defect carrier retired;
    dropped docs later removed and IDs renumbered); the sandbox gap
-   filed (now P013); docs (README/DESIGN) rewritten to the
-   single-backend shape with DeepSeek-via-`ANTHROPIC_BASE_URL` as the
-   worked example.
+   recorded as an accepted known regression; docs (README/DESIGN)
+   rewritten to the single-backend shape with
+   DeepSeek-via-`ANTHROPIC_BASE_URL` as the worked example.
 
 ## Compatibility impact
 
@@ -100,7 +100,7 @@ User-confirmed decisions (2026-10-10):
   (error); `--backend claude` + `-m` + `ANTHROPIC_BASE_URL` is the
   new canonical form. README quick-start updated accordingly.
 - Products/schemas/cache identity unchanged.
-- Known regression (accepted, filed as P013): judge can read
+- Known regression (accepted): judge can read
   `triage-kit/` products via CLI tools on the claude path — the
   general-only deny-list disappears with it.
 
@@ -140,4 +140,3 @@ User-confirmed decisions (2026-10-10):
   requirements.txt form, dropping the two general-harness defect
   entries, test removal).
 - Landed 2026-10-10 (verification plan fully green, see above).
-  Related: P013 (sandbox gap).

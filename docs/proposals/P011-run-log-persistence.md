@@ -33,10 +33,10 @@ requires the log to survive alongside the products.
   that "the sandbox already deny-lists `triage-kit/`, so logs cannot
   leak into a later judge run" described the retired general
   backend. On the claude path the CLI tools do not pass through any
-  deny-list (the P013 gap): a persisted `run.log` is exactly as
-  visible to a later judge as the `analysis.json` already sitting in
-  the same directory. Persisting the log adds no new exposure
-  surface; closing the gap itself is P013's scope.
+  deny-list: a persisted `run.log` is exactly as visible to a later
+  judge as the `analysis.json` already sitting in the same
+  directory. Persisting the log adds no new exposure surface;
+  closing that gap is out of scope here.
 
 ## Design
 
@@ -97,5 +97,5 @@ change (whole-directory removal already covers the log).
     lines (initial grep hits were trial names containing "error").
   - Unit: 137 tests green (6 new RunLogPersistence contract tests).
 - Related: P003 (`[trial_name]` prefixes make persisted logs
-  attributable); P013 (judge-visibility gap applies to the log the
-  same as to existing products).
+  attributable). The judge-visibility gap applies to the log the
+  same as to existing products.

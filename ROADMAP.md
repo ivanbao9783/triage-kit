@@ -23,7 +23,6 @@ Status values: `proposed` → `accepted` → `building` → `landed`, or
 | P010 | Job aggregation summary quality | feature | medium | proposed | [P010-job-aggregation-quality.md](docs/proposals/P010-job-aggregation-quality.md) |
 | P011 | Run log persistence under triage-kit/ | feature | medium | landed | [P011-run-log-persistence.md](docs/proposals/P011-run-log-persistence.md) |
 | P012 | Claude Agent SDK backend as the primary (and only) harness | refactor | high | landed | [P012-claude-backend-primary.md](docs/proposals/P012-claude-backend-primary.md) |
-| P013 | Judge sandbox gap on the claude backend path | feature | medium | proposed | [P013-judge-sandbox-claude-path.md](docs/proposals/P013-judge-sandbox-claude-path.md) |
 | P014 | check batch mode & human-readable products | feature | medium | landed | [P014-check-batch-and-readable.md](docs/proposals/P014-check-batch-and-readable.md) |
 | P015 | E2E mini dataset (fixed 3-task / 3-trial fixtures) | feature | medium | landed | [P015-e2e-mini-dataset.md](docs/proposals/P015-e2e-mini-dataset.md) |
 | P016 | Criteria matrix / heatmap (cross-trial × dimension) | feature | low | proposed | [P016-criteria-matrix.md](docs/proposals/P016-criteria-matrix.md) |

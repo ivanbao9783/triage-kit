@@ -39,7 +39,7 @@ notifications)`. Credentials/endpoints come from `DEEPSEEK_API_KEY` /
 - No Office operations (a separate local API, unrelated to judging).
 - No change to products, schemas, or cache identity (rubric sha256 +
   model); no new rubric / prompt assets; `claude` stays the default.
-- No judge-sandbox work here (P013 covers the claude path).
+- No judge-sandbox work here.
 
 ## Current state & gap
 
@@ -70,8 +70,7 @@ notifications)`. Credentials/endpoints come from `DEEPSEEK_API_KEY` /
   parsed object (no schema-enforced decode from the harness).
 - Read-only judge loop: the `sdk` profile inherits base `read`/`write`/
   `edit` tools, so there is **no** native read-only sandbox — constrain
-  via prompt policy or a profile patch (Decision at Gate 1; overlaps the
-  P013 concern).
+  via prompt policy or a profile patch (Decision at Gate 1).
 - `query` (no tools, single-shot, job-level aggregation) → `run()` on the
   `sdk-minimal` profile (single shell tool) or a prompt-only path (verify
   which profile fits).
@@ -129,5 +128,5 @@ source):
 - Spike 2026-10-12: structured output is **not** native (prompt-driven
   JSON needed); no token/cost in `RunResult`; Windows x64 only; SDK is
   `0.1.5rc1` — see Spike results.
-- Related: P012 (backend seam), P013 (judge sandbox). Upstream:
+- Related: P012 (backend seam). Upstream:
   https://github.com/deepseek-ai/deepseek-harness/blob/master/python/sdk/README.md
