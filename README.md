@@ -69,7 +69,7 @@ Requires Python 3.11+. The claude-agent-sdk dependency bundles the Claude Code C
 | `--failing` | Job mode: analyze failing trials only |
 | `--task-dir <path>` | Task directory override (the recorded task path may not exist on this machine) |
 | `--rubric <file>` | Custom rubric file (default: `assets/analyze/analyze-rubric.toml`) |
-| `--backend claude` | Backend selection (default: `claude`; more backends planned) |
+| `--backend claude` | Backend selection (default: `claude`) |
 | `-m, --model <name>` | Model name (default: `haiku`; pass e.g. `deepseek-flash` when using `ANTHROPIC_BASE_URL`) |
 | `-f, --force` | Re-analyze even if cached `triage-kit/analysis.json` exists (overwrites) |
 | `--lang en\|zh` | Report language for `analysis.md` (default: `en`; `zh` = natively composed Chinese, `analysis.json` stays English) |
@@ -93,7 +93,7 @@ Single task (the argument contains `task.toml`) or batch (every task directory o
 | Option | Description |
 |---|---|
 | `-r, --rubric <file\|family>` | Rubric file path or family name (default: `check-default`) |
-| `--backend claude` | Backend selection (default: `claude`; more backends planned) |
+| `--backend claude` | Backend selection (default: `claude`) |
 | `-m, --model <name>` | Model name (default: `sonnet`; pass e.g. `deepseek-flash` when using `ANTHROPIC_BASE_URL`) |
 | `-f, --force` | Re-check even if cached `triage-kit/check-result.json` exists (overwrites) |
 | `--lang en\|zh` | Report language for `check-result.md` (default: `en`; `zh` = natively composed Chinese, `check-result.json` stays English) |
@@ -130,7 +130,7 @@ Two shapes mirror `triage analyze`: a **trials root** serves an overview page (`
 
 Each trial page is split into five server-rendered tabs (state carried in `?tab=`): **overview** (outcome/tokens/cost KPIs, phase timing, artifacts), **score** (dynamic reward breakdown + verifier CTRF case list + exception), **trace** (per-step trajectory, with token bars deep-linking to a step), **tools** (aggregated tool-call stats + per-call detail), and **diagnosis** (that trial's `analysis.md`). The diagnosis tab **degrades to a hint** when a directory has no `triage-kit/` products, so raw evaluation results can be passed straight in — the native tabs render either way.
 
-Requires the `[viewer]` extra (`pip install -e '.[viewer]'`). The entry point is analyze (trials); a tasks directory is rejected with an explicit "check mode not yet supported" error (the check/tasks view is not implemented yet).
+Requires the `[viewer]` extra (`pip install -e '.[viewer]'`). The entry point is analyze (trials); a tasks directory is rejected with an explicit "check mode not yet supported" error.
 
 ### `triage clean <path>`
 
@@ -173,7 +173,7 @@ export ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic
 triage analyze path/to/job --failing -m deepseek-flash -j 8
 ```
 
-A DeepSeek Harness SDK backend (P018) is planned; it will join `--backend` (see [Roadmap](#roadmap)).
+A DeepSeek Harness SDK backend (P018) is planned (see [Roadmap](#roadmap)).
 
 **trae** — the hosting agent itself is the tool loop; a SKILL.md asset pack is on the roadmap.
 
@@ -214,7 +214,7 @@ source of truth. Larger items get a one-page design doc under
 
 ```bash
 pip install -r requirements.txt
-pytest                    # 248 tests, no network access needed
+pytest                    # 249 tests, no network access needed
 ```
 
 The viewer tests use `fastapi.testclient` (part of the `dev` extra) and need the `viewer` extra installed.

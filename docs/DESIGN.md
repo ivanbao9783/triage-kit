@@ -46,7 +46,7 @@
 | 多语言 | `--lang zh`：`analysis.md` / `check-result.md` 由中文原生撰写二跳直接生成（输入为结构化 payload 而非英文 markdown，P009 路线 B；check 侧复用共享规则块，P014）；JSON 产物恒英文；`analysis.zh.md` 退役 | 已落地 |
 | 运行日志 | 每次 CLI 运行把执行日志落盘 `<CLI 参数目录>/triage-kit/run.log`（覆盖式、文件恒 DEBUG、控制台行为不变，P011）；与产物同生共死，`clean` 一并复原 | 已落地 |
 | 复原 | `triage clean`：默认 dry-run，`--yes` 才删除；只删名为 `triage-kit/` 的目录，原生数据结构上不可能被误伤 | 已落地 |
-| 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——待立项 | 部分实现 |
+| 多步任务 | **检测/校验已实现**（`task_reader.detect_steps` + validate 拒绝空 steps/）；**逐 step 展开检查未实现**（`checker` 为单次整体检查）——已立项（P004） | 部分实现 |
 | task 目录 | analyze 的降级路径按主路径设计（跨机器拷贝场景 task path 必然失效），支持 `--task-dir` 覆盖 | 已落地 |
 | 项目名 | `triage-kit`（独立命名；NOTICE 保留 Harbor Apache 2.0 血缘致谢） | 已落地 |
 
@@ -122,7 +122,7 @@ triage-kit/
 │   │
 │   ├── viewer/                      ← 【查看层】本地只读零构建 SSR（可选 extra `[viewer]`）
 │   │   ├── scanner.py               纯数据层：`triage-kit/` 布局朴素 JSON 发现（零 web/md 依赖，可单测）
-│   │   ├── trajectory.py            ATIF（agent/trajectory.json）解析：逐步详情 + 工具调用聚合（按需加载）
+│   │   ├── trajectory.py            ATIF（agent/trajectory.json）解析：逐步详情 + 工具调用聚合（按需解析）
 │   │   ├── server.py                FastAPI + Jinja2 路由工厂（create_app）+ serve；包内模板相对路径解析
 │   │   └── templates/               base.html（token/组件库）+ index.html（trials 全景）+ trial.html（单 trial 五页签）
 │   │
@@ -339,7 +339,7 @@ rubric 设计质量的欠账**不靠预先重写偿还**，而是文档化修改
 
 ### 3. 确定性前置层（设计方向，未排期）
 
-check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p node-id 与 test.patch 匹配、config.json 报告路径与 test.sh 产出路径一致等）——这些是**确定性可验**的，不适合塞进 LLM rubric。规划形态：家族伴生确定性脚本（如 `core/contract_checks.py`），先跑确定性校验、结果注入 LLM 检查上下文，LLM 只处理真正需要判断的部分。契合既有评测哲学：**确定性、低延迟的检查做 CI 门禁，LLM 判断做趋势分析**。当前仅在架构上为 checker 管线留出"前置层"位置，未实现、未立项。
+check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p node-id 与 test.patch 匹配、config.json 报告路径与 test.sh 产出路径一致等）——这些是**确定性可验**的，不适合塞进 LLM rubric。规划形态：家族伴生确定性脚本（如 `core/contract_checks.py`），先跑确定性校验、结果注入 LLM 检查上下文，LLM 只处理真正需要判断的部分。契合既有评测哲学：**确定性、低延迟的检查做 CI 门禁，LLM 判断做趋势分析**。当前仅在架构上为 checker 管线留出"前置层"位置，未实现；已立项（P005）。
 
 ---
 
@@ -354,10 +354,10 @@ check 对 DeepSWE 类任务最有价值的检查是**契约自洽性**（f2p/p2p
 
 ## 十一、边界与已知取舍
 
-- **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。待立项（P004）
+- **多步任务逐 step 展开未实现**：`task_reader` 能检测 steps/ 并校验，但 `checker` 为单次整体检查——对多步任务存在与上游原版相同的盲区（根目录 instruction/tests 为空时部分 criteria 失去判定对象）。已立项（P004）
 - **analyze 侧 judge 禁读缺口**：judge 禁读机制（第七节）在 claude 路径上失效——CLI 工具不经本地沙箱，`triage-kit/` 旧产物对 judge 可见（已评估的已知取舍，暂不修复）
 - **并发无限流调度**：`-j/--jobs` 为固定线程数，无限流自动退避——限流由用户调低 `-j` 自理（非目标，见 P003）；且 worker 为 CLI 子进程，`-j` 过高会吃满机器资源
-- **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007 立项待办）
+- **模型身份不进聚合**：trial 的 agent/model 身份（result.json 的 `config.agent.*`）未进入 job 聚合 prompt——聚合模板第 6 点"agents/models 差异"在多 agent job 下无数据可用，LLM 只能声明无法比较（P007）
 - **非 Anthropic 官方模型的 meta 缺失**：兼容端点（如 DeepSeek）不回填 token usage，`AgentMeta` 的 token 计数为 None、`analysis.meta.json` 无 token 统计（不影响判定与缓存身份，cost 由 CLI 回填）
 - **中文报告为翻译体**：（P009 已修复并升级为路线 B）曾为英文报告的逐句翻译（`analysis.zh.md` 双文件形态）；现 `--lang zh` 直接以中文原生撰写生成 `analysis.md`（判定与 JSON 一致、标识符保留英文，JSON 契约产物恒英文）
 - **运行日志不落盘**：（P011 已修复）执行日志现持久化到 `<CLI 参数目录>/triage-kit/run.log`（恒 DEBUG、覆盖式，控制台行为不变），随产物同生共死，`triage clean` 一并复原

@@ -3,7 +3,6 @@
 
 Backend selection: 'claude' (Claude Agent SDK — also reaches
 Anthropic-compatible endpoints such as DeepSeek via ANTHROPIC_BASE_URL).
-The DeepSeek Harness SDK backend (P018) will join --backend.
 The trae harness is a skill form, not a CLI option.
 """
 
